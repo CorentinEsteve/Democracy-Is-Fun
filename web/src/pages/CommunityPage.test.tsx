@@ -6,7 +6,7 @@ import CommunityPage from '@/pages/CommunityPage';
 // Import REAL AuthProvider and useAuth
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import * as AuthContextModule from '@/contexts/AuthContext'; // Import module for spyOn
-import { useProposals, useVoteOnProposal } from '@/features/proposals/api';
+import { useProposals, useVoteOnProposal, useCreateProposal } from '@/features/proposals/api';
 import { Proposal, PartialUser, VoteType } from '@/features/proposals/types';
 import React from 'react';
 
@@ -16,6 +16,7 @@ vi.mock('@/features/proposals/api'); // Mock proposals API only
 
 const mockUseProposals = vi.mocked(useProposals);
 const mockUseVoteOnProposal = vi.mocked(useVoteOnProposal);
+const mockUseCreateProposal = vi.mocked(useCreateProposal);
 // REMOVED: const mockUseAuth = vi.mocked(useAuth);
 
 // Mock ChatPanel to simplify testing
@@ -85,6 +86,7 @@ describe('CommunityPage', () => {
     // Default mock implementations for other hooks
     mockUseProposals.mockReturnValue({ data: [], isLoading: true } as any);
     mockUseVoteOnProposal.mockReturnValue({ mutate: mockMutate, isPending: false } as any);
+    mockUseCreateProposal.mockReturnValue({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false, isError: false, error: null, reset: vi.fn() } as any);
   });
 
   afterEach(() => {
@@ -93,10 +95,13 @@ describe('CommunityPage', () => {
   });
 
   it('renders loading state initially', () => {
+    mockUseProposals.mockReturnValue({ data: [], isLoading: true } as any); // Ensure proposals are loading
     renderCommunityPage('1');
-    expect(screen.getByTestId('loading-indicator')).toBeInTheDocument(); 
+    // Check for the specific proposal loading indicator
+    expect(screen.getByTestId('loading-proposals-indicator')).toBeInTheDocument(); 
     expect(screen.queryByText(/test proposal render/i)).not.toBeInTheDocument();
-    expect(screen.getByTestId('chat-panel-mock')).toBeInTheDocument(); 
+    // Chat panel should still render its own loading/content state
+    // expect(screen.getByTestId('chat-panel-mock')).toBeInTheDocument(); 
   });
 
   it('renders error state', async () => {

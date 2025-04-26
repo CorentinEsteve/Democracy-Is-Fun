@@ -70,7 +70,53 @@ describe('AuthContext', () => {
     expect(JSON.parse(localStorageMock.getItem('authUser') || '{}')).toEqual(mockUser);
   });
 
-   it('should handle login failure', async () => {
+  it('should signup successfully, update state and localStorage', async () => {
+    const mockUser = { id: 2, name: 'New User', email: 'new@example.com' };
+    const mockToken = 'new-fake-jwt-token';
+    const signupCredentials = { name: 'New User', email: 'new@example.com', password: 'newpassword' };
+    
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { user: mockUser, token: mockToken },
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => {
+      await result.current.signup(signupCredentials);
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${import.meta.env.VITE_API_URL}/auth/signup`,
+      signupCredentials
+    );
+    expect(result.current.user).toEqual(mockUser);
+    expect(result.current.token).toBe(mockToken);
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(localStorageMock.getItem('authToken')).toBe(mockToken);
+    expect(JSON.parse(localStorageMock.getItem('authUser') || '{}')).toEqual(mockUser);
+  });
+
+  it('should handle signup failure', async () => {
+    const signupError = new Error('Signup failed');
+    const signupCredentials = { name: 'Fail User', email: 'fail@example.com', password: 'failpassword' };
+    mockedAxios.post.mockRejectedValueOnce(signupError);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => {
+      await expect(result.current.signup(signupCredentials))
+        .rejects.toThrow(signupError.message);
+    });
+
+    // Verify state after the failed attempt
+    expect(result.current.user).toBeNull();
+    expect(result.current.token).toBeNull();
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(localStorageMock.getItem('authToken')).toBeNull();
+    expect(localStorageMock.getItem('authUser')).toBeNull();
+  });
+
+  it('should handle login failure', async () => {
     const loginError = new Error('Login failed');
     mockedAxios.post.mockRejectedValueOnce(loginError);
 
@@ -89,7 +135,6 @@ describe('AuthContext', () => {
     expect(localStorageMock.getItem('authToken')).toBeNull();
     expect(localStorageMock.getItem('authUser')).toBeNull();
   });
-
 
   it('should logout successfully, update state and clear localStorage', async () => {
     // Setup initial logged-in state

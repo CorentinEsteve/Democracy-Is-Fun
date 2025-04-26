@@ -7,4 +7,8 @@ module.exports = {
   // collectCoverage: true,
   // coverageDirectory: "coverage",
   // coverageProvider: "v8",
+  // Add moduleNameMapper for path aliases
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+  },
 }; 

@@ -9,6 +9,13 @@ interface User {
   // Add other relevant user fields
 }
 
+// Define arguments for signup
+interface SignupCredentials {
+  name: string;
+  email: string;
+  password: string;
+}
+
 // Define the shape of the context data
 interface AuthContextType {
   user: User | null;
@@ -16,6 +23,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean; // Add loading state
   login: (email: string, password: string) => Promise<void>;
+  signup: (credentials: SignupCredentials) => Promise<void>; // Add signup method
   logout: () => void;
 }
 
@@ -77,6 +85,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // Signup function
+  const signup = useCallback(async ({ name, email, password }: SignupCredentials) => {
+    setIsLoading(true);
+    try {
+      const response = await axios.post<{ user: User; token: string }>(
+        `${import.meta.env.VITE_API_URL}/auth/signup`,
+        { name, email, password }
+      );
+      const { user: signedUpUser, token: authToken } = response.data;
+
+      localStorage.setItem('authToken', authToken);
+      localStorage.setItem('authUser', JSON.stringify(signedUpUser));
+      setToken(authToken);
+      setUser(signedUpUser);
+    } catch (error) {
+      console.error('Signup failed:', error);
+      // Clear any potentially leftover state
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('authUser');
+      setToken(null);
+      setUser(null);
+      throw error; // Re-throw error to be caught by the caller
+    } finally {
+        setIsLoading(false);
+    }
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('authUser');
@@ -92,6 +127,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated,
     isLoading,
     login,
+    signup, // Add signup to context value
     logout,
   };
 

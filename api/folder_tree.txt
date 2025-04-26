@@ -2,18 +2,24 @@
 ├── dist
 │   ├── middleware
 │   │   ├── authenticate.js
-│   │   └── authenticate.js.map
+│   │   ├── authenticate.js.map
+│   │   ├── authorizeAdmin.js
+│   │   └── authorizeAdmin.js.map
 │   ├── modules
 │   │   ├── auth
+│   │   ├── chat
 │   │   ├── community
 │   │   ├── event
 │   │   ├── note
 │   │   └── proposal
 │   ├── server.js
 │   ├── server.js.map
-│   └── types
-│       ├── index.js
-│       └── index.js.map
+│   ├── types
+│   │   ├── index.js
+│   │   └── index.js.map
+│   └── utils
+│       ├── jwt.js
+│       └── jwt.js.map
 ├── folder_tree.txt
 ├── jest.config.js
 ├── node_modules
@@ -110,6 +116,8 @@
 │   │   ├── engines-version
 │   │   ├── fetch-engine
 │   │   └── get-platform
+│   ├── @scarf
+│   │   └── scarf
 │   ├── @sinclair
 │   │   └── typebox
 │   ├── @sinonjs
@@ -152,6 +160,8 @@
 │   │   ├── strip-json-comments
 │   │   ├── superagent
 │   │   ├── supertest
+│   │   ├── swagger-ui-express
+│   │   ├── yamljs
 │   │   ├── yargs
 │   │   └── yargs-parser
 │   ├── @ungap
@@ -2594,6 +2604,36 @@
 │   │   ├── package.json
 │   │   ├── README.md
 │   │   └── test
+│   ├── swagger-ui-dist
+│   │   ├── absolute-path.js
+│   │   ├── favicon-16x16.png
+│   │   ├── favicon-32x32.png
+│   │   ├── index.css
+│   │   ├── index.html
+│   │   ├── index.js
+│   │   ├── LICENSE
+│   │   ├── NOTICE
+│   │   ├── oauth2-redirect.html
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── swagger-initializer.js
+│   │   ├── swagger-ui-bundle.js
+│   │   ├── swagger-ui-bundle.js.map
+│   │   ├── swagger-ui-es-bundle-core.js
+│   │   ├── swagger-ui-es-bundle-core.js.map
+│   │   ├── swagger-ui-es-bundle.js
+│   │   ├── swagger-ui-es-bundle.js.map
+│   │   ├── swagger-ui-standalone-preset.js
+│   │   ├── swagger-ui-standalone-preset.js.map
+│   │   ├── swagger-ui.css
+│   │   ├── swagger-ui.css.map
+│   │   ├── swagger-ui.js
+│   │   └── swagger-ui.js.map
+│   ├── swagger-ui-express
+│   │   ├── index.js
+│   │   ├── LICENSE
+│   │   ├── package.json
+│   │   └── README.md
 │   ├── tar
 │   │   ├── index.js
 │   │   ├── lib
@@ -2901,6 +2941,21 @@
 │   │   ├── package.json
 │   │   ├── README.md
 │   │   └── yallist.js
+│   ├── yamljs
+│   │   ├── bin
+│   │   ├── bower.json
+│   │   ├── Cakefile
+│   │   ├── cli
+│   │   ├── demo
+│   │   ├── dist
+│   │   ├── index.js
+│   │   ├── lib
+│   │   ├── LICENSE
+│   │   ├── node_modules
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   └── test
 │   ├── yargs
 │   │   ├── browser.d.ts
 │   │   ├── browser.mjs
@@ -2943,28 +2998,35 @@
 │       ├── node_modules
 │       ├── package.json
 │       └── README.md
+├── openapi.yaml
 ├── package-lock.json
 ├── package.json
 ├── prisma
 │   ├── dev.db
+│   ├── dev.db-journal
 │   ├── migrations
 │   │   ├── 20250425235024_init
 │   │   ├── 20250425235346_add_password_hash
+│   │   ├── 20250426134046_add_messages
 │   │   └── migration_lock.toml
 │   └── schema.prisma
 ├── README.md
 ├── src
 │   ├── __tests__
 │   │   ├── auth.test.ts
+│   │   ├── chat.test.ts
 │   │   ├── community.test.ts
 │   │   ├── event.test.ts
 │   │   ├── health.test.ts
+│   │   ├── membership.test.ts
 │   │   ├── note.test.ts
 │   │   └── proposal.test.ts
 │   ├── middleware
-│   │   └── authenticate.ts
+│   │   ├── authenticate.ts
+│   │   └── authorizeAdmin.ts
 │   ├── modules
 │   │   ├── auth
+│   │   ├── chat
 │   │   ├── community
 │   │   ├── event
 │   │   ├── note
@@ -2974,4 +3036,4 @@
 │       └── index.ts
 └── tsconfig.json
 
-854 directories, 2121 files
+873 directories, 2164 files

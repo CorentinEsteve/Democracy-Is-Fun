@@ -16,6 +16,8 @@ import { communityProposalsRouter, proposalSpecificRouter } from './modules/prop
 import { communityEventsRouter, singleEventRouter } from './modules/event/routes';
 // Import note routers
 import { communityNotesRouter, singleNoteRouter } from './modules/note/routes';
+// Import chat routes
+import chatRoutes from './modules/chat/routes';
 
 dotenv.config();
 
@@ -37,6 +39,8 @@ communityRoutes.use('/:communityId/proposals', communityProposalsRouter);
 communityRoutes.use('/:communityId/events', communityEventsRouter);
 // Mount community-specific note routes under /communities/:communityId/notes
 communityRoutes.use('/:communityId/notes', communityNotesRouter);
+// Mount chat routes
+app.use(chatRoutes); // Mount chat routes under the root
 app.use('/communities', communityRoutes);
 // Mount proposal-specific routes under /proposals
 app.use('/proposals', proposalSpecificRouter);
@@ -49,7 +53,7 @@ app.use(
   '/docs',
   swaggerUi.serve,
   swaggerUi.setup(openapiDocument, {
-    explorer: true,         // show the “Explore” bar
+    explorer: true,         // show the "Explore" bar
     swaggerOptions: {
       persistAuthorization: true  // keeps your JWT bearer filled in
     }

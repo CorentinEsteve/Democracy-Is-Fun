@@ -1,0 +1,59 @@
+.
+├── api
+│   ├── dist
+│   │   ├── middleware
+│   │   ├── modules
+│   │   ├── server.js
+│   │   ├── server.js.map
+│   │   ├── types
+│   │   └── utils
+│   ├── folder_tree.txt
+│   ├── jest.config.js
+│   ├── node_modules
+│   ├── openapi.yaml
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── prisma
+│   │   ├── dev.db
+│   │   ├── dev.db-journal
+│   │   ├── migrations
+│   │   └── schema.prisma
+│   ├── README.md
+│   ├── src
+│   │   ├── __tests__
+│   │   ├── middleware
+│   │   ├── modules
+│   │   ├── server.ts
+│   │   └── types
+│   └── tsconfig.json
+├── folder_tree.txt
+└── web
+    ├── components.json
+    ├── folder_tree.txt
+    ├── index.html
+    ├── node_modules
+    ├── package-lock.json
+    ├── package.json
+    ├── postcss.config.cjs
+    ├── src
+    │   ├── api
+    │   ├── App.tsx
+    │   ├── components
+    │   ├── contexts
+    │   ├── env.d.ts
+    │   ├── features
+    │   ├── hooks
+    │   ├── index.css
+    │   ├── lib
+    │   ├── main.tsx
+    │   ├── pages
+    │   ├── styles
+    │   ├── ui
+    │   ├── utils
+    │   └── vitest.setup.ts
+    ├── tailwind.config.ts
+    ├── tsconfig.json
+    ├── tsconfig.node.json
+    └── vite.config.ts
+
+782 directories, 29 files

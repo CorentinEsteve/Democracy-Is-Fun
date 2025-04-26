@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { app, prisma } from '../server';
 import * as authService from '../modules/auth/services/authService';
@@ -18,29 +19,40 @@ const createUserAndGetToken = async (
 };
 
 describe('Community API', () => {
-  let user1: User;
-  let token1: string;
-  let user2: User;
-  let token2: string;
+  let adminUser: User;
+  let memberUser: User;
+  let adminToken: string;
+  let memberToken: string;
 
   beforeAll(async () => {
-    // Clear potential leftover data
+    // Clear potential leftover data in correct order
+    await prisma.event.deleteMany({});
+    await prisma.note.deleteMany({});
+    await prisma.vote.deleteMany({});
+    await prisma.message.deleteMany({});
+    await prisma.opposition.deleteMany({});
+    await prisma.proposal.deleteMany({});
     await prisma.membership.deleteMany({});
     await prisma.community.deleteMany({});
     await prisma.user.deleteMany({});
 
     // Create users for testing
-    const u1Data = await createUserAndGetToken('user1@community.test', 'User One');
-    user1 = u1Data.user;
-    token1 = u1Data.token;
-
-    const u2Data = await createUserAndGetToken('user2@community.test', 'User Two');
-    user2 = u2Data.user;
-    token2 = u2Data.token;
+    const adminData = await createUserAndGetToken('comm-admin@example.com', 'Comm Admin');
+    const memberData = await createUserAndGetToken('comm-member@example.com', 'Comm Member');
+    adminUser = adminData.user;
+    memberUser = memberData.user;
+    adminToken = adminData.token;
+    memberToken = memberData.token;
   });
 
   afterAll(async () => {
-    // Clean up database
+    // Clean up database in correct order
+    await prisma.event.deleteMany({});
+    await prisma.note.deleteMany({});
+    await prisma.vote.deleteMany({});
+    await prisma.message.deleteMany({});
+    await prisma.opposition.deleteMany({});
+    await prisma.proposal.deleteMany({});
     await prisma.membership.deleteMany({});
     await prisma.community.deleteMany({});
     await prisma.user.deleteMany({});
@@ -63,17 +75,17 @@ describe('Community API', () => {
 
       const response = await request(app)
         .post('/communities')
-        .set('Authorization', `Bearer ${token1}`)
+        .set('Authorization', `Bearer ${adminToken}`)
         .send(communityData);
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe(communityData.name);
       expect(response.body.description).toBe(communityData.description);
-      expect(response.body.creatorId).toBe(user1.id);
+      expect(response.body.creatorId).toBe(adminUser.id);
       expect(response.body.memberships).toHaveLength(1);
-      expect(response.body.memberships[0].userId).toBe(user1.id);
+      expect(response.body.memberships[0].userId).toBe(adminUser.id);
       expect(response.body.memberships[0].role).toBe('Admin');
-      expect(response.body.memberships[0].user.name).toBe(user1.name);
+      expect(response.body.memberships[0].user.name).toBe(adminUser.name);
 
       // Verify in DB
       const dbCommunity = await prisma.community.findUnique({
@@ -82,14 +94,14 @@ describe('Community API', () => {
       });
       expect(dbCommunity).not.toBeNull();
       expect(dbCommunity?.memberships).toHaveLength(1);
-      expect(dbCommunity?.memberships[0].userId).toBe(user1.id);
+      expect(dbCommunity?.memberships[0].userId).toBe(adminUser.id);
       expect(dbCommunity?.memberships[0].role).toBe('Admin');
     });
 
     it('should return 400 if name is missing', async () => {
       const response = await request(app)
         .post('/communities')
-        .set('Authorization', `Bearer ${token1}`)
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({ description: 'Missing name' });
 
       expect(response.status).toBe(400);
@@ -115,36 +127,36 @@ describe('Community API', () => {
         community1 = await prisma.community.create({
             data: {
                 name: 'User1 Community',
-                creatorId: user1.id,
+                creatorId: adminUser.id,
             },
         });
         await prisma.membership.create({
-            data: { userId: user1.id, communityId: community1.id, role: 'Admin' },
+            data: { userId: adminUser.id, communityId: community1.id, role: 'Admin' },
         });
 
         community2 = await prisma.community.create({
             data: {
                 name: 'User2 Community',
-                creatorId: user2.id,
+                creatorId: memberUser.id,
             },
         });
         await prisma.membership.create({
-            data: { userId: user2.id, communityId: community2.id, role: 'Admin' },
+            data: { userId: memberUser.id, communityId: community2.id, role: 'Admin' },
         });
 
-         // Add user1 as a member to community2 for testing list filtering
+         // Add adminUser as a member to community2 for testing list filtering
          await prisma.membership.create({
-            data: { userId: user1.id, communityId: community2.id, role: 'Member'}
+            data: { userId: adminUser.id, communityId: community2.id, role: 'Member'}
          })
     });
 
     it('should return only communities the user is a member of', async () => {
       const response = await request(app)
         .get('/communities')
-        .set('Authorization', `Bearer ${token1}`);
+        .set('Authorization', `Bearer ${adminToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(2); // User1 is member of community1 and community2
+      expect(response.body).toHaveLength(2); // AdminUser is member of community1 and community2
       // Check if both communities are present (order might vary)
       expect(response.body.map((c: Community) => c.id).sort()).toEqual([community1.id, community2.id].sort());
     });
@@ -176,31 +188,31 @@ describe('Community API', () => {
       community1 = await prisma.community.create({
         data: {
             name: 'Detail Community',
-            creatorId: user1.id,
+            creatorId: adminUser.id,
         },
       });
       await prisma.membership.create({
-        data: { userId: user1.id, communityId: community1.id, role: 'Admin' },
+        data: { userId: adminUser.id, communityId: community1.id, role: 'Admin' },
       });
     });
 
     it('should return community details if user is a member', async () => {
       const response = await request(app)
         .get(`/communities/${community1.id}`)
-        .set('Authorization', `Bearer ${token1}`);
+        .set('Authorization', `Bearer ${adminToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(community1.id);
       expect(response.body.name).toBe('Detail Community');
       expect(response.body.memberships).toBeDefined();
       expect(response.body.memberships).toHaveLength(1);
-      expect(response.body.memberships[0].userId).toBe(user1.id);
+      expect(response.body.memberships[0].userId).toBe(adminUser.id);
     });
 
     it('should return 403 if user is not a member', async () => {
       const response = await request(app)
         .get(`/communities/${community1.id}`)
-        .set('Authorization', `Bearer ${token2}`);
+        .set('Authorization', `Bearer ${memberToken}`);
 
       expect(response.status).toBe(403);
       expect(response.body.message).toBe('Forbidden: User is not a member of this community');
@@ -210,7 +222,7 @@ describe('Community API', () => {
       const nonExistentId = 99999;
       const response = await request(app)
         .get(`/communities/${nonExistentId}`)
-        .set('Authorization', `Bearer ${token1}`);
+        .set('Authorization', `Bearer ${adminToken}`);
 
       expect(response.status).toBe(404);
        expect(response.body.message).toBe('Community not found');
@@ -231,14 +243,14 @@ describe('Community API', () => {
         community1 = await prisma.community.create({
             data: {
                 name: 'Patch Me',
-                creatorId: user1.id,
+                creatorId: adminUser.id,
             },
         });
         // Create memberships separately
         await prisma.membership.createMany({
             data: [
-                { userId: user1.id, communityId: community1.id, role: 'Admin' }, // User1 is Admin
-                { userId: user2.id, communityId: community1.id, role: 'Member'}  // User2 is Member
+                { userId: adminUser.id, communityId: community1.id, role: 'Admin' }, // AdminUser is Admin
+                { userId: memberUser.id, communityId: community1.id, role: 'Member'}  // MemberUser is Member
             ],
         });
      });
@@ -250,7 +262,7 @@ describe('Community API', () => {
        };
        const response = await request(app)
          .patch(`/communities/${community1.id}`)
-         .set('Authorization', `Bearer ${token1}`)
+         .set('Authorization', `Bearer ${adminToken}`)
          .send(updateData);
 
        expect(response.status).toBe(200);
@@ -266,7 +278,7 @@ describe('Community API', () => {
         const updateData = { name: 'Should Fail Patch' };
         const response = await request(app)
             .patch(`/communities/${community1.id}`)
-            .set('Authorization', `Bearer ${token2}`)
+            .set('Authorization', `Bearer ${memberToken}`)
             .send(updateData);
 
         expect(response.status).toBe(403);
@@ -278,7 +290,7 @@ describe('Community API', () => {
         const updateData = { name: 'Should Fail Patch 404' };
         const response = await request(app)
             .patch(`/communities/${nonExistentId}`)
-            .set('Authorization', `Bearer ${token1}`)
+            .set('Authorization', `Bearer ${adminToken}`)
             .send(updateData);
 
         expect(response.status).toBe(404);
@@ -303,14 +315,14 @@ describe('Community API', () => {
         communityToDelete = await prisma.community.create({
             data: {
                 name: 'Delete Me',
-                creatorId: user1.id,
+                creatorId: adminUser.id,
             },
         });
         // Create memberships separately
         await prisma.membership.createMany({
             data: [
-                { userId: user1.id, communityId: communityToDelete.id, role: 'Admin' }, // User1 is Admin
-                { userId: user2.id, communityId: communityToDelete.id, role: 'Member'}  // User2 is Member
+                { userId: adminUser.id, communityId: communityToDelete.id, role: 'Admin' }, // AdminUser is Admin
+                { userId: memberUser.id, communityId: communityToDelete.id, role: 'Member'}  // MemberUser is Member
             ],
         });
       });
@@ -318,7 +330,7 @@ describe('Community API', () => {
     it('should delete the community if user is admin', async () => {
         const response = await request(app)
             .delete(`/communities/${communityToDelete.id}`)
-            .set('Authorization', `Bearer ${token1}`);
+            .set('Authorization', `Bearer ${adminToken}`);
 
         expect(response.status).toBe(204);
 
@@ -332,7 +344,7 @@ describe('Community API', () => {
     it('should return 403 if user is a member but not admin', async () => {
         const response = await request(app)
             .delete(`/communities/${communityToDelete.id}`)
-            .set('Authorization', `Bearer ${token2}`);
+            .set('Authorization', `Bearer ${memberToken}`);
 
         expect(response.status).toBe(403);
         expect(response.body.message).toBe('Forbidden: User is not an admin of this community');
@@ -342,7 +354,7 @@ describe('Community API', () => {
         const nonExistentId = 99999;
         const response = await request(app)
             .delete(`/communities/${nonExistentId}`)
-            .set('Authorization', `Bearer ${token1}`);
+            .set('Authorization', `Bearer ${adminToken}`);
 
         expect(response.status).toBe(404);
          expect(response.body.message).toBe('Community not found');

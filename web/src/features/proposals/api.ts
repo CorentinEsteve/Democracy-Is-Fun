@@ -45,4 +45,42 @@ export const useVoteOnProposal = (communityId: number | undefined) => {
       console.error("Error voting on proposal:", error);
     }
   });
+};
+
+// --- Create Proposal --- 
+export interface CreateProposalPayload {
+  communityId: number;
+  title: string;
+  description?: string;
+  location?: string;
+  dateTime?: string; // ISO string
+  tags?: string[];
+  deadline?: string; // ISO string
+  quorumPct?: number;
+}
+
+const createProposal = async (payload: CreateProposalPayload): Promise<Proposal> => {
+  const { communityId, ...rest } = payload;
+  const response = await apiClient.post(`/communities/${communityId}/proposals`, rest);
+  return response.data; 
+};
+
+export const useCreateProposal = (communityId: number | undefined) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<Proposal, Error, CreateProposalPayload>({
+    mutationFn: createProposal,
+    onSuccess: (/* createdProposal */) => {
+       // Invalidate proposals for this community on successful creation
+      queryClient.invalidateQueries({
+        queryKey: [PROPOSALS_QUERY_KEY, communityId],
+      });
+      // Potentially show a success notification
+    },
+    onError: (error) => {
+      // Handle or log error globally/locally if needed
+      console.error("Error creating proposal:", error);
+      // Potentially show an error notification
+    }
+  });
 }; 

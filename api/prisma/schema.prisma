@@ -13,6 +13,8 @@ generator client {
 //   Member
 // }
 
+// Removed VoteType enum
+
 model User {
   id        Int      @id @default(autoincrement())
   name      String
@@ -27,6 +29,7 @@ model User {
   initiatedProposals Proposal[]   @relation("ProposalInitiator")
   votes              Vote[]
   notes              Note[]
+  messages           Message[]
 }
 
 model Community {
@@ -44,6 +47,7 @@ model Community {
   proposals   Proposal[]
   notes       Note[]
   events      Event[]
+  messages    Message[]
 
   @@index([creatorId])
 }
@@ -98,19 +102,25 @@ model Proposal {
 }
 
 model Vote {
-  id       Int      @id @default(autoincrement())
-  voteType String
-  votedAt  DateTime @default(now())
-
-  proposalId Int
-  proposal   Proposal @relation(fields: [proposalId], references: [id])
-
-  voterId Int
-  voter   User @relation(fields: [voterId], references: [id])
+  id          Int       @id @default(autoincrement())
+  proposalId  Int
+  voterId     Int
+  voteType    String    // Changed from VoteType enum to String
+  createdAt   DateTime  @default(now())
+  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  voter       User     @relation(fields: [voterId], references: [id], onDelete: Cascade)
 
   @@unique([proposalId, voterId])
-  @@index([proposalId])
-  @@index([voterId])
+}
+
+model Message {
+  id          Int      @id @default(autoincrement())
+  content     String
+  createdAt   DateTime @default(now())
+  communityId Int
+  authorId    Int
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
 model Opposition {

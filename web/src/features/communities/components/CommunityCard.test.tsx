@@ -1,7 +1,18 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
+import { BrowserRouter } from 'react-router-dom';
 import CommunityCard from './CommunityCard';
 import { Community } from '../types';
+
+// Mock useParams
+const mockUseParams = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('react-router-dom')>();
+    return {
+        ...actual,
+        useParams: () => mockUseParams(), // Return the mock function's result
+    };
+});
 
 const mockCommunity: Community = {
   id: 1,
@@ -12,71 +23,61 @@ const mockCommunity: Community = {
   updatedAt: '2023-01-01T00:00:00Z',
 };
 
-const mockOnClick = vi.fn();
+// Helper function for rendering with router
+const renderWithRouter = (ui: React.ReactElement, communityIdParam?: string) => {
+    mockUseParams.mockReturnValue({ communityId: communityIdParam }); // Set mock return value
+    return render(<BrowserRouter>{ui}</BrowserRouter>);
+};
 
 describe('CommunityCard', () => {
   beforeEach(() => {
-    mockOnClick.mockClear();
+    mockUseParams.mockClear();
   });
 
   it('renders community name and description', () => {
-    render(
-      <CommunityCard
-        community={mockCommunity}
-        isSelected={false}
-        onClick={mockOnClick}
-      />
+    renderWithRouter(
+      <CommunityCard community={mockCommunity} />
     );
     expect(screen.getByText(mockCommunity.name)).toBeInTheDocument();
     expect(screen.getByText(mockCommunity.description!)).toBeInTheDocument();
+    // Check that it renders a link
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/communities/1');
   });
 
   it('does not render description if null', () => {
     const communityWithoutDesc = { ...mockCommunity, description: null };
-    render(
-      <CommunityCard
-        community={communityWithoutDesc}
-        isSelected={false}
-        onClick={mockOnClick}
-      />
+    renderWithRouter(
+      <CommunityCard community={communityWithoutDesc} />
     );
     expect(screen.getByText(mockCommunity.name)).toBeInTheDocument();
     expect(screen.queryByText(mockCommunity.description!)).not.toBeInTheDocument();
   });
 
-  it('calls onClick when clicked', () => {
-    render(
-      <CommunityCard
-        community={mockCommunity}
-        isSelected={false}
-        onClick={mockOnClick}
-      />
+  it('applies selected styles when URL parameter matches community ID', () => {
+    const { container } = renderWithRouter(
+      <CommunityCard community={mockCommunity} />,
+      '1' // Mock useParams to return communityId = '1'
     );
-    fireEvent.click(screen.getByText(mockCommunity.name));
-    expect(mockOnClick).toHaveBeenCalledTimes(1);
+    // Check for the specific class applied when selected
+    const cardElement = container.querySelector('.ring-2.ring-primary');
+    expect(cardElement).toBeInTheDocument();
   });
 
-  it('applies selected styles when isSelected is true', () => {
-    const { container } = render(
-      <CommunityCard
-        community={mockCommunity}
-        isSelected={true}
-        onClick={mockOnClick}
-      />
+  it('does not apply selected styles when URL parameter does not match', () => {
+    const { container } = renderWithRouter(
+      <CommunityCard community={mockCommunity} />,
+      '2' // Mock useParams to return different communityId
     );
-    // Check for a class that indicates selection (e.g., ring)
-    // Note: Exact class depends on implementation using cn()
-    expect(container.firstChild).toHaveClass('ring-2'); // Example check
+    const cardElement = container.querySelector('.ring-2.ring-primary');
+    expect(cardElement).not.toBeInTheDocument();
   });
 
-  it('does not apply selected styles when isSelected is false', () => {
-      const { container } = render(
-        <CommunityCard
-          community={mockCommunity}
-          isSelected={false}
-          onClick={mockOnClick}
-        />
+   it('does not apply selected styles when URL parameter is absent', () => {
+      const { container } = renderWithRouter(
+        <CommunityCard community={mockCommunity} />
+        // No communityId param passed to render helper
       );
-      expect(container.firstChild).not.toHaveClass('ring-2'); // Example check
+      const cardElement = container.querySelector('.ring-2.ring-primary');
+      expect(cardElement).not.toBeInTheDocument();
     });
 }); 

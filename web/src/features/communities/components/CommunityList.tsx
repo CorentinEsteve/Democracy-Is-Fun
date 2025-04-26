@@ -4,11 +4,11 @@ import CommunityCard from './CommunityCard';
 
 interface CommunityListProps {
   communities: Community[];
-  selectedCommunityId: number | null;
-  onSelect: (id: number) => void;
+  // selectedCommunityId: number | null; // Removed - handled inside CommunityCard via useParams
+  // onSelect: (id: number) => void; // Removed - navigation handled by Link in CommunityCard
 }
 
-const CommunityList: React.FC<CommunityListProps> = ({ communities, selectedCommunityId, onSelect }) => {
+const CommunityList: React.FC<CommunityListProps> = ({ communities }) => {
   if (!communities || communities.length === 0) {
     return <p className="text-center text-muted-foreground">No communities found.</p>;
   }
@@ -19,8 +19,8 @@ const CommunityList: React.FC<CommunityListProps> = ({ communities, selectedComm
         <CommunityCard
           key={community.id}
           community={community}
-          isSelected={community.id === selectedCommunityId}
-          onClick={() => onSelect(community.id)}
+          // isSelected prop removed
+          // onClick prop removed
         />
       ))}
     </div>
