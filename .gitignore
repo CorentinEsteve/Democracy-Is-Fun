@@ -39,3 +39,19 @@ api/*.ntvs*
 api/*.njsproj
 api/*.sln
 api/*.sw? 
+
+# Web
+web/node_modules/
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/package-lock.json
+web/pnpm-lock.yaml
+
+# Web
+web/folder_tree.txt
+web/package.json
+web/tsconfig.json
+web/tsconfig.node.json
+web/tsconfig.app.json
+web/tsconfig.app.json
