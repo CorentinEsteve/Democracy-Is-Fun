@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+The repo layout is:
+
+apps/
+  web/       # React frontend
+    src/
+      features/
+        [slice]/
+          components/
+          hooks/
+          api/
+      pages/
+      ui/
+  api/       # Node+Express backend
+    src/
+      modules/
+        [module]/
+          controllers/
+          services/
+          models/
+          routes.ts
+    prisma/
+      schema.prisma
+    server.ts
+Always generate files under these folders and follow this structure.

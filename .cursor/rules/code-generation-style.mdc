@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+When responding to code generation requests:
+- Only generate code inside the requested file.
+- Do not add explanations, comments, or extra text unless explicitly asked.
+- Keep the response minimal and clean.
+- Assume the project follows a structured and professional style.

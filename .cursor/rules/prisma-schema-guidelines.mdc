@@ -1,0 +1,19 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Use Prisma to define these models in schema.prisma:
+
+model User { … }
+model Community { … }
+model Membership { … }
+model Proposal { … }
+model Vote { … }
+model Opposition { … }
+model Note { … }
+model Event { … }
+- Use enums for VoteType and Role.
+- Set up proper relations and indexes.
+- After any schema change, run `prisma migrate dev` and commit the SQL migration.
+- Use a single shared PrismaClient instance exported from `prisma/client.ts`.

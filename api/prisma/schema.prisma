@@ -1,0 +1,155 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  passwordHash String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdCommunities Community[]  @relation("CommunityCreator")
+  memberships        Membership[]
+  initiatedProposals Proposal[]   @relation("ProposalInitiator")
+  votes              Vote[]
+  notes              Note[]
+}
+
+model Community {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creatorId Int
+  creator   User @relation("CommunityCreator", fields: [creatorId], references: [id])
+
+  memberships Membership[]
+  proposals   Proposal[]
+  notes       Note[]
+  events      Event[]
+
+  @@index([creatorId])
+}
+
+model Membership {
+  userId      Int
+  communityId Int
+  role        String   @default("Member")
+  points      Int      @default(0)
+  joinedAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  community Community @relation(fields: [communityId], references: [id])
+
+  @@id([userId, communityId])
+  @@index([userId])
+  @@index([communityId])
+}
+
+model Proposal {
+  id          Int            @id @default(autoincrement())
+  title       String
+  description String?
+  location    String?
+  dateTime    DateTime?
+  tags        String         // Changed back to String, will store as JSON
+  deadline    DateTime
+  quorumPct   Int            @default(100)
+  status      String         @default("Active")
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  communityId Int
+  community   Community @relation(fields: [communityId], references: [id])
+
+  initiatorId Int
+  initiator   User @relation("ProposalInitiator", fields: [initiatorId], references: [id])
+
+  votes        Vote[]
+  event        Event?
+  oppositions  Opposition[] @relation("OriginalProposal")
+  alternatives Opposition[] @relation("AlternativeProposal")
+
+  parentProposalId Int?
+  parentProposal   Proposal?  @relation("ProposalRevisions", fields: [parentProposalId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  revisions        Proposal[] @relation("ProposalRevisions")
+
+  @@index([communityId])
+  @@index([initiatorId])
+  @@index([status])
+  @@index([parentProposalId])
+}
+
+model Vote {
+  id       Int      @id @default(autoincrement())
+  voteType String
+  votedAt  DateTime @default(now())
+
+  proposalId Int
+  proposal   Proposal @relation(fields: [proposalId], references: [id])
+
+  voterId Int
+  voter   User @relation(fields: [voterId], references: [id])
+
+  @@unique([proposalId, voterId])
+  @@index([proposalId])
+  @@index([voterId])
+}
+
+model Opposition {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  originalProposalId Int
+  originalProposal   Proposal @relation("OriginalProposal", fields: [originalProposalId], references: [id])
+
+  alternativeProposalId Int      @unique
+  alternativeProposal   Proposal @relation("AlternativeProposal", fields: [alternativeProposalId], references: [id])
+
+  @@index([originalProposalId])
+  @@index([alternativeProposalId])
+}
+
+model Note {
+  id        Int      @id @default(autoincrement())
+  content   String
+  timestamp DateTime @default(now()) @updatedAt
+
+  communityId Int
+  community   Community @relation(fields: [communityId], references: [id])
+
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+
+  @@index([communityId])
+  @@index([authorId])
+}
+
+model Event {
+  id        Int      @id @default(autoincrement())
+  title     String
+  dateTime  DateTime
+  location  String?
+  createdAt DateTime @default(now())
+
+  proposalId Int      @unique
+  proposal   Proposal @relation(fields: [proposalId], references: [id])
+
+  communityId Int
+  community   Community @relation(fields: [communityId], references: [id])
+
+  @@index([proposalId])
+  @@index([communityId])
+  @@index([dateTime])
+}
