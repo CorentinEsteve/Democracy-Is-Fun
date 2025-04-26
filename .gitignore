@@ -1,0 +1,41 @@
+# Node.js & Dependencies
+api/node_modules/
+api/npm-debug.log*
+api/yarn-debug.log*
+api/yarn-error.log*
+api/package-lock.json
+api/pnpm-lock.yaml
+
+# TypeScript Compilation
+api/dist/
+api/*.tsbuildinfo
+
+# Prisma
+api/prisma/dev.db
+api/prisma/dev.db-journal
+api/prisma/migrations/*.sql # Typically migrations are committed, but exclude generated SQL if desired
+
+# Environment Variables
+api/.env*
+!api/.env.example
+
+# Logs
+api/logs
+api/*.log
+
+# Test Artifacts
+api/coverage/
+api/.nyc_output/
+
+# OS Generated Files
+api/.DS_Store
+api/Thumbs.db
+
+# Editor Directories and Files
+api/.idea/
+api/.vscode/
+api/*.suo
+api/*.ntvs*
+api/*.njsproj
+api/*.sln
+api/*.sw? 
