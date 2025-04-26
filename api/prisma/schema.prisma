@@ -7,6 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Define Role enum - Removed as SQLite doesn't support it
+// enum Role {
+//   Admin
+//   Member
+// }
+
 model User {
   id        Int      @id @default(autoincrement())
   name      String
@@ -45,7 +51,7 @@ model Community {
 model Membership {
   userId      Int
   communityId Int
-  role        String   @default("Member")
+  role        String   @default("Member") // Back to String for SQLite compatibility
   points      Int      @default(0)
   joinedAt    DateTime @default(now())
 

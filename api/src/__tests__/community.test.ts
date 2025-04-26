@@ -167,8 +167,8 @@ describe('Community API', () => {
     });
   });
 
-  // --- GET /communities/:id --- 
-  describe('GET /communities/:id', () => {
+  // --- GET /communities/:communityId --- 
+  describe('GET /communities/:communityId', () => {
     let community1: Community;
 
     beforeEach(async () => {
@@ -222,8 +222,8 @@ describe('Community API', () => {
     });
   });
 
-  // --- PATCH /communities/:id --- 
-  describe('PATCH /communities/:id', () => {
+  // --- PATCH /communities/:communityId --- 
+  describe('PATCH /communities/:communityId', () => {
      let community1: Community;
 
      beforeEach(async () => {
@@ -294,8 +294,8 @@ describe('Community API', () => {
     });
   });
 
-  // --- DELETE /communities/:id --- 
-  describe('DELETE /communities/:id', () => {
+  // --- DELETE /communities/:communityId --- 
+  describe('DELETE /communities/:communityId', () => {
     let communityToDelete: Community;
 
     beforeEach(async () => {

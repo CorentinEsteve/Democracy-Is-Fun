@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+apps/web/
+  src/
+    features/              # 1 feature per folder (auth, communities, proposals, etc.)
+      [feature]/
+        components/
+        hooks/
+        api/               # React-Query or Axios calls
+        types.ts
+    pages/                 # Next.js–style or react-router pages
+    contexts/             # AuthContext, ProposalContext, etc.
+    ui/                   # Shared UI (Buttons, Cards, Inputs) using Tailwind + shadcn/ui
+    utils/                 # date formatting, API helpers
+    App.tsx                # root + routing

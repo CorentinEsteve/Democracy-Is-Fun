@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCommunityAndMemberships = exports.updateCommunityDetails = exports.isUserAdmin = exports.isUserMember = exports.findCommunityById = exports.findCommunitiesByUserId = exports.createCommunityWithAdmin = void 0;
+exports.removeMemberFromCommunity = exports.addMemberToCommunity = exports.findCommunityMembers = exports.deleteCommunityAndMemberships = exports.updateCommunityDetails = exports.isUserAdmin = exports.isUserMember = exports.findCommunityById = exports.findCommunitiesByUserId = exports.createCommunityWithAdmin = void 0;
 const server_1 = require("../../../server"); // Adjust path if necessary
 const createCommunityWithAdmin = async (data, creatorId) => {
     return server_1.prisma.$transaction(async (tx) => {
@@ -120,4 +120,52 @@ const deleteCommunityAndMemberships = async (communityId) => {
     });
 };
 exports.deleteCommunityAndMemberships = deleteCommunityAndMemberships;
+const findCommunityMembers = async (communityId) => {
+    return server_1.prisma.membership.findMany({
+        where: { communityId },
+        include: {
+            user: { select: { id: true, name: true, avatarUrl: true } },
+        },
+        orderBy: {
+            user: { name: 'asc' } // Order by member name
+        }
+    });
+};
+exports.findCommunityMembers = findCommunityMembers;
+const addMemberToCommunity = async (communityId, userId) => {
+    // Check if user exists (optional but good practice)
+    const userExists = await server_1.prisma.user.findUnique({ where: { id: userId } });
+    if (!userExists) {
+        throw new Error('User to be added does not exist.');
+    }
+    // Check if community exists (optional)
+    const communityExists = await server_1.prisma.community.findUnique({ where: { id: communityId } });
+    if (!communityExists) {
+        throw new Error('Community does not exist.');
+    }
+    // Create the membership (will throw P2002 if already exists)
+    return server_1.prisma.membership.create({
+        data: {
+            userId,
+            communityId,
+            role: 'Member', // Default role
+            points: 0, // Default points
+        },
+    });
+};
+exports.addMemberToCommunity = addMemberToCommunity;
+const removeMemberFromCommunity = async (communityId, userId) => {
+    // Check if user is the creator (cannot remove the creator)
+    const community = await server_1.prisma.community.findUnique({ where: { id: communityId } });
+    if (community?.creatorId === userId) {
+        throw new Error('Cannot remove the community creator.');
+    }
+    // Delete the membership (will throw P2025 if not found)
+    return server_1.prisma.membership.delete({
+        where: {
+            userId_communityId: { userId, communityId },
+        },
+    });
+};
+exports.removeMemberFromCommunity = removeMemberFromCommunity;
 //# sourceMappingURL=communityService.js.map

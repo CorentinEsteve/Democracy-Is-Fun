@@ -1,0 +1,1387 @@
+openapi: 3.0.3
+info:
+  title: Votons Fun! API
+  description: API for the Votons Fun! platform to manage communities, proposals, votes, events, and notes.
+  version: 1.0.0
+servers:
+  - url: /api/v1 # Assuming a base path, adjust if needed
+    description: Development server
+components:
+  schemas:
+    # --- Core Entities ---
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: 'Alex Dupont'
+        email:
+          type: string
+          format: email
+          example: 'alex.dupont@example.com'
+        avatarUrl:
+          type: string
+          format: url
+          nullable: true
+          example: 'https://example.com/avatar.jpg'
+        createdAt:
+           type: string
+           format: date-time
+        updatedAt:
+           type: string
+           format: date-time
+      required:
+        - id
+        - name
+        - email
+        - createdAt
+        - updatedAt
+    Community:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: 'Hiking Club'
+        description:
+          type: string
+          nullable: true
+          example: 'Organizing weekly hikes'
+        imageUrl:
+          type: string
+          format: url
+          nullable: true
+          example: 'https://example.com/community.jpg'
+        creatorId:
+          type: integer
+          example: 1
+        createdAt:
+           type: string
+           format: date-time
+        updatedAt:
+           type: string
+           format: date-time
+      required:
+        - id
+        - name
+        - creatorId
+        - createdAt
+        - updatedAt
+    Membership:
+      type: object
+      properties:
+        userId:
+          type: integer
+          example: 1
+        communityId:
+          type: integer
+          example: 1
+        role:
+          type: string
+          enum: [Admin, Member]
+          example: Admin
+        points:
+          type: integer
+          default: 0
+          example: 10
+        joinedAt:
+           type: string
+           format: date-time
+        user: # Include nested user for convenience in member lists
+          $ref: '#/components/schemas/User'
+      required:
+        - userId
+        - communityId
+        - role
+        - points
+        - joinedAt
+        - user
+    Proposal:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        communityId:
+          type: integer
+          example: 1
+        initiatorId:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: 'Weekend Hike to Mont Royal'
+        description:
+          type: string
+          nullable: true
+          example: 'Meet at the base at 10 AM Saturday.'
+        location:
+          type: string
+          nullable: true
+          example: 'Mont Royal Park Entrance'
+        dateTime:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2024-08-17T10:00:00Z'
+        tags:
+          type: array
+          items:
+            type: string
+          example: ['Outdoors', 'Weekend']
+        deadline:
+          type: string
+          format: date-time
+          example: '2024-08-10T23:59:59Z'
+        quorumPct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 50
+        status:
+          type: string
+          enum: [Active, Approved, Rejected, Tied]
+          default: Active
+          example: Active
+        parentProposalId:
+          type: integer
+          nullable: true
+          example: null
+        createdAt:
+           type: string
+           format: date-time
+        updatedAt:
+           type: string
+           format: date-time
+        # Consider adding vote counts or initiator details if needed often
+      required:
+        - id
+        - communityId
+        - initiatorId
+        - title
+        - deadline
+        - quorumPct
+        - status
+        - createdAt
+        - updatedAt
+    Vote:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        proposalId:
+          type: integer
+          example: 1
+        voterId:
+          type: integer
+          example: 2
+        voteType:
+          type: string
+          enum: [For, Against, Neutral]
+          example: For
+        votedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - proposalId
+        - voterId
+        - voteType
+        - votedAt
+    Event: # Typically derived from an Approved Proposal
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        proposalId:
+          type: integer
+          example: 1 # Link back to the originating proposal
+        communityId:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: 'Weekend Hike to Mont Royal'
+        dateTime:
+          type: string
+          format: date-time
+          example: '2024-08-17T10:00:00Z'
+        location:
+          type: string
+          nullable: true
+          example: 'Mont Royal Park Entrance'
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - proposalId
+        - communityId
+        - title
+        - dateTime
+        - createdAt
+    Note:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        communityId:
+          type: integer
+          example: 1
+        authorId:
+          type: integer
+          example: 1
+        content:
+          type: string
+          example: 'Remember to bring water bottles for the hike.'
+        timestamp: # Note: Schema uses `timestamp`, likely maps to createdAt/updatedAt
+           type: string
+           format: date-time
+        createdAt:
+           type: string
+           format: date-time
+        updatedAt:
+           type: string
+           format: date-time
+      required:
+        - id
+        - communityId
+        - authorId
+        - content
+        - createdAt
+        - updatedAt
+
+    # --- Request Bodies ---
+    SignupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: 'Jane Doe'
+        email:
+          type: string
+          format: email
+          example: 'jane.doe@example.com'
+        password:
+          type: string
+          format: password
+          example: 's3cureP@sswOrd'
+      required:
+        - name
+        - email
+        - password
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: 'jane.doe@example.com'
+        password:
+          type: string
+          format: password
+          example: 's3cureP@sswOrd'
+      required:
+        - email
+        - password
+    CreateCommunityRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: 'Book Club'
+        description:
+          type: string
+          nullable: true
+          example: 'Monthly book discussions'
+        imageUrl:
+          type: string
+          format: url
+          nullable: true
+      required:
+        - name
+    UpdateCommunityRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: 'Book Club - Evening Edition'
+        description:
+          type: string
+          nullable: true
+          example: 'Monthly book discussions (now evenings)'
+        imageUrl:
+          type: string
+          format: url
+          nullable: true
+    CreateProposalRequest:
+        type: object
+        properties:
+          title:
+            type: string
+            example: 'Discuss "Dune" next month'
+          description:
+            type: string
+            nullable: true
+            example: 'Focus on chapters 1-10'
+          location:
+            type: string
+            nullable: true
+            example: 'Online Meeting'
+          dateTime:
+            type: string
+            format: date-time
+            nullable: true
+            example: '2024-09-15T19:00:00Z'
+          tags:
+            type: array
+            items:
+              type: string
+            example: ['BookClub', 'SciFi']
+          deadline:
+            type: string
+            format: date-time
+            example: '2024-09-01T23:59:59Z' # Default: 1 week? Service needs to handle default
+          quorumPct:
+            type: integer
+            minimum: 0
+            maximum: 100
+            default: 100 # Service needs to handle default
+            example: 75
+        required:
+          - title
+          # Deadline and quorumPct might have defaults server-side
+    VoteRequest:
+      type: object
+      properties:
+        voteType:
+          type: string
+          enum: [For, Against, Neutral]
+          example: For
+      required:
+        - voteType
+    CreateNoteRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          example: 'Adding a new note.'
+      required:
+        - content
+    UpdateNoteRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          example: 'Updated note content.'
+      required:
+        - content
+    AddMemberRequest:
+      type: object
+      properties:
+        userId:
+          type: integer
+          example: 5 # ID of the user to add
+      required:
+        - userId
+
+    # --- Responses ---
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+        - token
+        - user
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: 'Resource not found'
+      required:
+        - message
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: [] # Apply JWT globally
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Checks if the API is running. No authentication required.
+      tags: [Health]
+      security: [] # Override global security
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: OK
+                  timestamp:
+                    type: string
+                    format: date-time
+  /auth/signup:
+    post:
+      summary: User Signup
+      description: Registers a new user.
+      tags: [Authentication]
+      security: [] # No auth needed to sign up
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid input (e.g., missing fields, invalid email)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/login:
+    post:
+      summary: User Login
+      description: Authenticates a user and returns a JWT.
+      tags: [Authentication]
+      security: [] # No auth needed to log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid input (e.g., missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /communities:
+    get:
+      summary: List User's Communities
+      description: Retrieves a list of communities the authenticated user is a member of.
+      tags: [Communities]
+      responses:
+        '200':
+          description: A list of communities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Community'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Create Community
+      description: Creates a new community with the authenticated user as the initial admin.
+      tags: [Communities]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommunityRequest'
+      responses:
+        '201':
+          description: Community created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Community' # Returns the created community
+        '400':
+          description: Invalid input (e.g., missing name)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /communities/{communityId}:
+    parameters:
+      - name: communityId
+        in: path
+        required: true
+        description: ID of the community
+        schema:
+          type: integer
+    get:
+      summary: Get Community Details
+      description: Retrieves details for a specific community if the user is a member.
+      tags: [Communities]
+      responses:
+        '200':
+          description: Community details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Community'
+        '400':
+          description: Invalid community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not a member)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Update Community
+      description: Updates details for a specific community. Requires admin privileges.
+      tags: [Communities]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCommunityRequest'
+      responses:
+        '200':
+          description: Community updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Community' # Returns the updated community
+        '400':
+          description: Invalid input or community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not an admin)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete Community
+      description: Deletes a specific community. Requires admin privileges.
+      tags: [Communities]
+      responses:
+        '204':
+          description: Community deleted successfully
+        '400':
+          description: Invalid community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not an admin)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /communities/{communityId}/members:
+    parameters:
+      - name: communityId
+        in: path
+        required: true
+        description: ID of the community
+        schema:
+          type: integer
+    get:
+      summary: List Community Members
+      description: Retrieves a list of members for a specific community. Requires membership.
+      tags: [Memberships]
+      responses:
+        '200':
+          description: A list of community members with user details
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Membership' # Includes nested user
+        '400':
+          description: Invalid community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not a member)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Add Member to Community
+      description: Adds a user to a community. Requires admin privileges for the community.
+      tags: [Memberships]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+      responses:
+        '201':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership' # Returns the new membership record
+        '400':
+          description: Invalid input (e.g., invalid user ID, trying to add self)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not an admin of this community)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community or User to add not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict (User is already a member)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /communities/{communityId}/members/{userId}:
+    parameters:
+      - name: communityId
+        in: path
+        required: true
+        description: ID of the community
+        schema:
+          type: integer
+      - name: userId
+        in: path
+        required: true
+        description: ID of the user (member) to remove
+        schema:
+          type: integer
+    delete:
+      summary: Remove Member from Community
+      description: Removes a user from a community. Requires admin privileges for the community. Cannot remove the creator.
+      tags: [Memberships]
+      responses:
+        '204':
+          description: Member removed successfully
+        '400':
+          description: Invalid input (e.g., invalid IDs, trying to remove creator)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not an admin of this community)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community, User, or Membership not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /communities/{communityId}/proposals:
+    parameters:
+      - name: communityId
+        in: path
+        required: true
+        description: ID of the community
+        schema:
+          type: integer
+    get:
+      summary: List Community Proposals
+      description: Retrieves proposals for a specific community. Requires membership. Filters (e.g., active, archived) might be query params.
+      tags: [Proposals]
+      # Add query parameters for filtering (status, tags, etc.) if implemented
+      # parameters:
+      #   - name: status
+      #     in: query
+      #     required: false
+      #     schema:
+      #       type: string
+      #       enum: [Active, Approved, Rejected, Tied]
+      responses:
+        '200':
+          description: A list of proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Proposal'
+        '400':
+          description: Invalid community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not a member)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Create Proposal
+      description: Creates a new proposal within a community. Requires membership.
+      tags: [Proposals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProposalRequest'
+      responses:
+        '201':
+          description: Proposal created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+        '400':
+          description: Invalid input (e.g., missing title) or community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not a member)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /proposals/{proposalId}:
+    parameters:
+      - name: proposalId
+        in: path
+        required: true
+        description: ID of the proposal
+        schema:
+          type: integer
+    get:
+      summary: Get Proposal Details
+      description: Retrieves details for a specific proposal. Requires membership in the proposal's community.
+      tags: [Proposals]
+      responses:
+        '200':
+          description: Proposal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+        '400':
+          description: Invalid proposal ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not a member of the proposal's community)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Proposal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /proposals/{proposalId}/vote:
+    parameters:
+      - name: proposalId
+        in: path
+        required: true
+        description: ID of the proposal to vote on
+        schema:
+          type: integer
+    post:
+      summary: Cast Vote on Proposal
+      description: Allows a member to cast or change their vote on an active proposal.
+      tags: [Proposals, Votes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoteRequest'
+      responses:
+        '200': # Or 201 if creating a new vote
+          description: Vote cast/updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vote' # Returns the vote record
+        '400':
+          description: Invalid input (invalid vote type or proposal ID format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User not member, or voting not allowed - e.g., proposal not active)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Proposal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409': # Maybe use 409 if voting deadline passed? Or handle in 403.
+          description: Conflict (e.g., voting closed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /communities/{communityId}/events:
+    parameters:
+      - name: communityId
+        in: path
+        required: true
+        description: ID of the community
+        schema:
+          type: integer
+    get:
+      summary: List Community Events
+      description: Retrieves approved events (derived from proposals) for a community. Requires membership.
+      tags: [Events]
+      responses:
+        '200':
+          description: A list of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '400':
+          description: Invalid community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not a member)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /events/{eventId}/ics:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        description: ID of the event
+        schema:
+          type: integer
+    get:
+      summary: Get Event ICS File
+      description: Generates an iCalendar (.ics) file for a specific event. Requires membership in the event's community.
+      tags: [Events]
+      responses:
+        '200':
+          description: ICS file content
+          content:
+            text/calendar: # Standard MIME type for iCalendar
+              schema:
+                type: string
+                format: binary # Or just string, depending on how it's served
+        '400':
+          description: Invalid event ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User not member of event's community)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /communities/{communityId}/notes:
+    parameters:
+      - name: communityId
+        in: path
+        required: true
+        description: ID of the community
+        schema:
+          type: integer
+    get:
+      summary: List Community Notes
+      description: Retrieves collaborative notes for a community. Requires membership.
+      tags: [Notes]
+      responses:
+        '200':
+          description: A list of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Note'
+        '400':
+          description: Invalid community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not a member)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Create Note
+      description: Adds a new note to the community's collaborative notes. Requires membership.
+      tags: [Notes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNoteRequest'
+      responses:
+        '201':
+          description: Note created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '400':
+          description: Invalid input or community ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User is not a member)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Community not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /notes/{noteId}:
+    parameters:
+      - name: noteId
+        in: path
+        required: true
+        description: ID of the note
+        schema:
+          type: integer
+    patch:
+      summary: Update Note
+      description: Updates the content of a note. Requires authorship or admin privileges (TBD).
+      tags: [Notes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNoteRequest'
+      responses:
+        '200':
+          description: Note updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '400':
+          description: Invalid input or note ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User cannot edit this note)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Note not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete Note
+      description: Deletes a note. Requires authorship or admin privileges (TBD).
+      tags: [Notes]
+      responses:
+        '204':
+          description: Note deleted successfully
+        '400':
+          description: Invalid note ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (User cannot delete this note)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Note not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

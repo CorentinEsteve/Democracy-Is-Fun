@@ -165,68 +165,83 @@ exports.recordOrUpdateVote = recordOrUpdateVote;
 // --- Status Update Logic --- 
 // This function still returns the raw Proposal type, as its primary job is DB update
 const checkAndUpdateProposalStatus = async (proposalId) => {
-    const proposal = await server_1.prisma.proposal.findUniqueOrThrow({
-        where: { id: proposalId },
-        include: { votes: true }
-    });
-    // Don't re-evaluate if not active
-    if (proposal.status !== 'Active') {
-        return proposal;
-    }
-    const communityMemberCount = await server_1.prisma.membership.count({
-        where: { communityId: proposal.communityId },
-    });
-    if (communityMemberCount === 0)
-        return proposal; // Avoid division by zero
-    const votes = proposal.votes;
-    const votesFor = votes.filter(v => v.voteType === 'For').length;
-    const votesAgainst = votes.filter(v => v.voteType === 'Against').length;
-    const votesNeutral = votes.filter(v => v.voteType === 'Neutral').length;
-    const totalVotesCast = votesFor + votesAgainst + votesNeutral;
-    const participationPct = (totalVotesCast / communityMemberCount) * 100;
-    const quorumMet = participationPct >= proposal.quorumPct;
-    const deadlineReached = new Date() >= proposal.deadline;
-    let newStatus = proposal.status; // Default to current status
-    // 1. Check for Early Close (Insurmountable Majority)
-    const remainingVotes = communityMemberCount - totalVotesCast;
-    if (votesFor > votesAgainst + remainingVotes + votesNeutral) { // Votes For cannot be beaten
-        newStatus = 'Approved';
-    }
-    else if (votesAgainst > votesFor + remainingVotes + votesNeutral) { // Votes Against cannot be beaten
-        newStatus = 'Rejected';
-    }
-    // 2. If not early closed, check for Deadline Reached conditions
-    if (newStatus === 'Active' && deadlineReached) {
-        if (quorumMet) {
-            if (votesFor > votesAgainst) {
-                newStatus = 'Approved';
-            }
-            else if (votesAgainst > votesFor) {
-                newStatus = 'Rejected';
+    return server_1.prisma.$transaction(async (tx) => {
+        const proposal = await tx.proposal.findUniqueOrThrow({
+            where: { id: proposalId },
+            include: { votes: true }
+        });
+        // Don't re-evaluate if not active
+        if (proposal.status !== 'Active') {
+            return proposal;
+        }
+        const communityMemberCount = await tx.membership.count({
+            where: { communityId: proposal.communityId },
+        });
+        if (communityMemberCount === 0)
+            return proposal; // Avoid division by zero
+        const votes = proposal.votes;
+        const votesFor = votes.filter(v => v.voteType === 'For').length;
+        const votesAgainst = votes.filter(v => v.voteType === 'Against').length;
+        const votesNeutral = votes.filter(v => v.voteType === 'Neutral').length;
+        const totalVotesCast = votesFor + votesAgainst + votesNeutral;
+        const participationPct = (totalVotesCast / communityMemberCount) * 100;
+        const quorumMet = participationPct >= proposal.quorumPct;
+        const deadlineReached = new Date() >= proposal.deadline;
+        let newStatus = proposal.status; // Default to current status
+        // 1. Check for Early Close (Insurmountable Majority)
+        const remainingVotes = communityMemberCount - totalVotesCast;
+        if (votesFor > votesAgainst + remainingVotes + votesNeutral) { // Votes For cannot be beaten
+            newStatus = 'Approved';
+        }
+        else if (votesAgainst > votesFor + remainingVotes + votesNeutral) { // Votes Against cannot be beaten
+            newStatus = 'Rejected';
+        }
+        // 2. If not early closed, check for Deadline Reached conditions
+        if (newStatus === 'Active' && deadlineReached) {
+            if (quorumMet) {
+                if (votesFor > votesAgainst) {
+                    newStatus = 'Approved';
+                }
+                else if (votesAgainst > votesFor) {
+                    newStatus = 'Rejected';
+                }
+                else {
+                    // Tie at deadline with quorum: remains Active per spec (or could be Rejected/Archived)
+                    newStatus = 'Active'; // Explicitly keep active on tie
+                }
             }
             else {
-                // Tie at deadline with quorum: remains Active per spec (or could be Rejected/Archived)
-                newStatus = 'Active'; // Explicitly keep active on tie
+                // Quorum not met by deadline
+                newStatus = 'Rejected'; // Or move to an 'Expired' / 'Archived' status
             }
         }
-        else {
-            // Quorum not met by deadline
-            newStatus = 'Rejected'; // Or move to an 'Expired' / 'Archived' status
+        // 3. Update status in DB if changed
+        if (newStatus !== proposal.status) {
+            const updatedProposal = await tx.proposal.update({
+                where: { id: proposalId },
+                data: { status: newStatus },
+            });
+            // --- Add Event Creation --- 
+            if (newStatus === 'Approved' && updatedProposal.dateTime) { // Only create event if approved AND has dateTime
+                await tx.event.create({
+                    data: {
+                        title: updatedProposal.title,
+                        dateTime: updatedProposal.dateTime, // Use proposal dateTime
+                        location: updatedProposal.location,
+                        proposalId: updatedProposal.id,
+                        communityId: updatedProposal.communityId,
+                    }
+                });
+                // TODO: Award points (requires Membership update in transaction)
+                // Example: await tx.membership.update({ where: { userId_communityId: { userId: updatedProposal.initiatorId, communityId: updatedProposal.communityId } }, data: { points: { increment: 10 } } });
+            }
+            // --- End Add Event Creation --- 
+            return updatedProposal;
         }
-    }
-    // 3. Update status in DB if changed
-    if (newStatus !== proposal.status) {
-        const updatedProposal = await server_1.prisma.proposal.update({
-            where: { id: proposalId },
-            data: { status: newStatus },
-        });
-        // TODO: If Approved, create Event (requires Event module/service)
-        // TODO: If Approved, award points (requires Membership update)
-        return updatedProposal;
-    }
-    else {
-        return proposal; // Return original proposal if status didn't change
-    }
+        else {
+            return proposal; // Return original proposal if status didn't change
+        }
+    });
 };
 exports.checkAndUpdateProposalStatus = checkAndUpdateProposalStatus;
 //# sourceMappingURL=proposalService.js.map

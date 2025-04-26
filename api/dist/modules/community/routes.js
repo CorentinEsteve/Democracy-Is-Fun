@@ -36,13 +36,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const communityController = __importStar(require("./controllers/communityController"));
 const authenticate_1 = require("../../middleware/authenticate"); // Import middleware
+const authorizeAdmin_1 = require("../../middleware/authorizeAdmin"); // Import admin auth middleware
 const router = (0, express_1.Router)();
-// Apply authenticate middleware to all community routes
-router.use(authenticate_1.authenticate);
-router.post('/', communityController.createCommunity);
-router.get('/', communityController.listCommunities);
-router.get('/:id', communityController.getCommunity);
-router.patch('/:id', communityController.updateCommunity);
-router.delete('/:id', communityController.deleteCommunity);
+// Community Level Routes (require auth)
+router.post('/', authenticate_1.authenticate, communityController.createCommunity);
+router.get('/', authenticate_1.authenticate, communityController.listCommunities);
+// Specific Community Routes (require auth, sometimes admin)
+router.get('/:communityId', authenticate_1.authenticate, communityController.getCommunity);
+router.patch('/:communityId', authenticate_1.authenticate, authorizeAdmin_1.authorizeAdmin, communityController.updateCommunity);
+router.delete('/:communityId', authenticate_1.authenticate, authorizeAdmin_1.authorizeAdmin, communityController.deleteCommunity);
+// Membership Routes within a Community
+router.get('/:communityId/members', authenticate_1.authenticate, communityController.listMembers);
+router.post('/:communityId/members', authenticate_1.authenticate, authorizeAdmin_1.authorizeAdmin, communityController.addMember);
+router.delete('/:communityId/members/:userId', authenticate_1.authenticate, authorizeAdmin_1.authorizeAdmin, communityController.removeMember);
 exports.default = router;
 //# sourceMappingURL=routes.js.map

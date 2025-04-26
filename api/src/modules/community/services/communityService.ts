@@ -149,4 +149,61 @@ export const deleteCommunityAndMemberships = async (
     // Finally, delete the community itself
     await tx.community.delete({ where: { id: communityId } });
   });
+};
+
+// --- Membership Management --- 
+
+// Define type for member list response
+export type MembershipWithUser = Membership & {
+    user: Pick<User, 'id' | 'name' | 'avatarUrl'>;
+};
+
+export const findCommunityMembers = async (communityId: number): Promise<MembershipWithUser[]> => {
+    return prisma.membership.findMany({
+        where: { communityId },
+        include: {
+            user: { select: { id: true, name: true, avatarUrl: true } },
+        },
+        orderBy: {
+            user: { name: 'asc' } // Order by member name
+        }
+    });
+};
+
+export const addMemberToCommunity = async (communityId: number, userId: number): Promise<Membership> => {
+    // Check if user exists (optional but good practice)
+    const userExists = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userExists) {
+        throw new Error('User to be added does not exist.');
+    }
+    // Check if community exists (optional)
+    const communityExists = await prisma.community.findUnique({ where: { id: communityId } });
+     if (!communityExists) {
+        throw new Error('Community does not exist.');
+    }
+
+    // Create the membership (will throw P2002 if already exists)
+    return prisma.membership.create({
+        data: {
+            userId,
+            communityId,
+            role: 'Member', // Default role
+            points: 0,      // Default points
+        },
+    });
+};
+
+export const removeMemberFromCommunity = async (communityId: number, userId: number): Promise<Membership> => {
+    // Check if user is the creator (cannot remove the creator)
+    const community = await prisma.community.findUnique({ where: { id: communityId } });
+    if (community?.creatorId === userId) {
+        throw new Error('Cannot remove the community creator.');
+    }
+
+    // Delete the membership (will throw P2025 if not found)
+    return prisma.membership.delete({
+        where: {
+            userId_communityId: { userId, communityId },
+        },
+    });
 }; 

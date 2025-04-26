@@ -12,6 +12,10 @@ const routes_1 = __importDefault(require("./modules/auth/routes")); // Import au
 const routes_2 = __importDefault(require("./modules/community/routes")); // Import community routes
 // Import proposal routers
 const routes_3 = require("./modules/proposal/routes");
+// Import event routers
+const routes_4 = require("./modules/event/routes");
+// Import note routers
+const routes_5 = require("./modules/note/routes");
 dotenv_1.default.config();
 exports.prisma = new client_1.PrismaClient();
 exports.app = (0, express_1.default)();
@@ -24,9 +28,17 @@ exports.app.get('/health', (req, res) => {
 exports.app.use('/auth', routes_1.default); // Use auth routes
 // Mount community-specific proposal routes under /communities/:communityId/proposals
 routes_2.default.use('/:communityId/proposals', routes_3.communityProposalsRouter);
+// Mount community-specific event routes under /communities/:communityId/events
+routes_2.default.use('/:communityId/events', routes_4.communityEventsRouter);
+// Mount community-specific note routes under /communities/:communityId/notes
+routes_2.default.use('/:communityId/notes', routes_5.communityNotesRouter);
 exports.app.use('/communities', routes_2.default);
 // Mount proposal-specific routes under /proposals
 exports.app.use('/proposals', routes_3.proposalSpecificRouter);
+// Mount event-specific routes under /events
+exports.app.use('/events', routes_4.singleEventRouter);
+// Mount note-specific routes under /notes
+exports.app.use('/notes', routes_5.singleNoteRouter);
 const PORT = process.env.PORT || 3001;
 // Conditional server start (prevents listening during tests)
 if (process.env.NODE_ENV !== 'test') {

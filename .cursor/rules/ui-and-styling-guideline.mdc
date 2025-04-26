@@ -1,0 +1,11 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- Use Tailwind for layout and spacing
+- shadcn/ui for basic components (Card, Button, Input)
+- lucide-react for icons
+- Grid/Flex-based layouts, 2xl rounded corners, soft shadows
+- Light/dark mode toggle in context
+- No inline styles; prefer utility classes
