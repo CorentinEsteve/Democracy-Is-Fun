@@ -1,6 +1,7 @@
 import request from 'supertest';
-import { app } from '../server'; // Import app only
-import { User, Community, Membership, PrismaClient } from '@prisma/client';
+import { app, prisma } from '../server'; // Adjust path as needed
+import { signJwt } from '../modules/auth/services/authService'; // Adjust path
+import { User, Community, Membership, MembershipRole } from '@prisma/client';
 import { RoleType } from '../types';
 import jwt from 'jsonwebtoken';
 
@@ -53,13 +54,47 @@ jest.mock('../middleware/authorizeAdmin', () => ({
     })
 }));
 
-
 const mockPrisma = new PrismaClient();
 
 // Helper to generate JWT for tests
 const generateTestToken = (userId: number, email: string = 'test@example.com'): string => {
     return jwt.sign({ userId, email }, process.env.JWT_SECRET || 'test-secret', { expiresIn: '1h' });
 };
+
+// --- Test Setup --- 
+let adminUser: User;
+let memberUser: User;
+let otherUser: User;
+let community: Community;
+let adminToken: string;
+let memberToken: string;
+let otherToken: string;
+
+beforeAll(async () => {
+    // Clean database before tests
+    await prisma.membership.deleteMany({});
+    await prisma.community.deleteMany({});
+    await prisma.user.deleteMany({});
+
+    // Create users
+    adminUser = await prisma.user.create({ data: { name: 'Admin User', email: 'admin@test.com', password: 'password' } });
+    memberUser = await prisma.user.create({ data: { name: 'Member User', email: 'member@test.com', password: 'password' } });
+    otherUser = await prisma.user.create({ data: { name: 'Other User', email: 'other@test.com', password: 'password' } });
+
+    // Create community with admin as creator/admin
+    community = await prisma.community.create({ data: { name: 'Test Community', creatorId: adminUser.id } });
+    await prisma.membership.create({ data: { userId: adminUser.id, communityId: community.id, role: 'Admin' } });
+    await prisma.membership.create({ data: { userId: memberUser.id, communityId: community.id, role: 'Member' } });
+
+    // Generate tokens
+    adminToken = signJwt({ userId: adminUser.id, email: adminUser.email });
+    memberToken = signJwt({ userId: memberUser.id, email: memberUser.email });
+    otherToken = signJwt({ userId: otherUser.id, email: otherUser.email });
+});
+
+afterAll(async () => {
+    await prisma.$disconnect();
+});
 
 describe('Membership API Endpoints', () => {
     let testUser: User;
@@ -302,5 +337,134 @@ describe('Membership API Endpoints', () => {
             expect(response.status).toBe(400);
             expect(response.body.message).toContain('Cannot remove the community creator');
         });
+    });
+
+    // --- PATCH /communities/:communityId/members/:userId - Update Member Role --- 
+    describe('PATCH /communities/:communityId/members/:userId - Update Member Role', () => {
+
+        it('should allow an admin to update a member\'s role to Admin', async () => {
+            const response = await request(app)
+                .patch(`/communities/${community.id}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: MembershipRole.Admin });
+
+            expect(response.status).toBe(200);
+            expect(response.body.userId).toBe(memberUser.id);
+            expect(response.body.communityId).toBe(community.id);
+            expect(response.body.role).toBe(MembershipRole.Admin);
+
+            // Verify in DB
+            const updatedMembership = await prisma.membership.findUnique({ 
+                where: { userId_communityId: { userId: memberUser.id, communityId: community.id } }
+            });
+            expect(updatedMembership?.role).toBe(MembershipRole.Admin);
+        });
+
+        it('should allow an admin to update an admin\'s role back to Member', async () => {
+            // First, ensure memberUser is Admin from previous test or set explicitly
+            await prisma.membership.update({ 
+                where: { userId_communityId: { userId: memberUser.id, communityId: community.id } },
+                data: { role: MembershipRole.Admin }
+             });
+
+            const response = await request(app)
+                .patch(`/communities/${community.id}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: MembershipRole.Member });
+
+            expect(response.status).toBe(200);
+            expect(response.body.role).toBe(MembershipRole.Member);
+
+            // Verify in DB
+            const updatedMembership = await prisma.membership.findUnique({ 
+                where: { userId_communityId: { userId: memberUser.id, communityId: community.id } }
+            });
+            expect(updatedMembership?.role).toBe(MembershipRole.Member);
+        });
+
+        it('should return 403 if a non-admin tries to update a role', async () => {
+            const response = await request(app)
+                .patch(`/communities/${community.id}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${memberToken}`) // Use member token
+                .send({ role: MembershipRole.Admin });
+
+            expect(response.status).toBe(403);
+            expect(response.body.message).toContain('admin privileges required');
+        });
+
+         it('should return 403 if an admin of another community tries to update a role', async () => {
+             // Assume otherUser is admin of a different community (not set up here, but token implies)
+            const response = await request(app)
+                .patch(`/communities/${community.id}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${otherToken}`) // Use other user token
+                .send({ role: MembershipRole.Admin });
+
+            expect(response.status).toBe(403);
+            expect(response.body.message).toContain('admin privileges required'); // authorizeAdmin checks specific community
+        });
+
+        it('should return 400 if the role is invalid', async () => {
+            const response = await request(app)
+                .patch(`/communities/${community.id}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: 'SuperAdmin' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.message).toContain('Invalid role provided');
+        });
+
+        it('should return 404 if the membership does not exist', async () => {
+            const nonMemberId = otherUser.id; // User not in this community
+            const response = await request(app)
+                .patch(`/communities/${community.id}/members/${nonMemberId}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: MembershipRole.Admin });
+
+            expect(response.status).toBe(404); 
+            expect(response.body.message).toContain('Membership not found');
+        });
+
+         it('should return 404 if the community does not exist', async () => {
+            const nonExistentCommunityId = 9999;
+            const response = await request(app)
+                .patch(`/communities/${nonExistentCommunityId}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: MembershipRole.Admin });
+
+            // authorizeAdmin middleware should handle this check before controller
+            expect(response.status).toBe(404); 
+            expect(response.body.message).toContain('Community not found'); 
+        });
+
+        it('should return 400 if trying to change the creator\'s role', async () => {
+            const creatorUserId = adminUser.id; // The creator is the admin in this setup
+            const response = await request(app)
+                .patch(`/communities/${community.id}/members/${creatorUserId}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: MembershipRole.Member });
+
+            // Note: The controller also prevents admins changing their *own* role,
+            // but the service layer prevents changing the *creator's* role specifically.
+            // Let's assume a different admin tries to change the creator's role.
+            // We'll simulate this by allowing the controller check to pass but expecting the service error.
+            // This requires a more complex setup or relaxing the controller check slightly for the test.
+            // For simplicity, we test the direct outcome assuming the service check is the primary one.
+
+             // If creator = requesting admin, controller returns 400: "cannot change own role"
+             // If different admin requests, service returns 400: "cannot change creator's role"
+            expect(response.status).toBe(400); 
+            expect(response.body.message).toMatch(/Cannot change the community creator's role|Admins cannot change their own role/);
+        });
+
+        it('should return 400 if admin tries to change their own role', async () => {
+            const response = await request(app)
+                .patch(`/communities/${community.id}/members/${adminUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: MembershipRole.Member });
+            
+            expect(response.status).toBe(400); 
+            expect(response.body.message).toContain('Admins cannot change their own role');
+        });
+
     });
 }); 

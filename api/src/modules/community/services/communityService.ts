@@ -1,4 +1,4 @@
-import { Prisma, Community, Membership, User } from '@prisma/client';
+import { Prisma, Community, Membership, User, MembershipRole } from '@prisma/client';
 import { prisma } from '../../../server'; // Adjust path if necessary
 
 type CommunityWithMembers = Community & {
@@ -265,5 +265,31 @@ export const removeMemberFromCommunity = async (communityId: number, userId: num
         where: {
             userId_communityId: { userId, communityId },
         },
+    });
+};
+
+// New service function to update member role
+export const updateMemberRoleInCommunity = async (
+    communityId: number, 
+    userId: number, 
+    newRole: MembershipRole // Use enum type if defined, otherwise string
+): Promise<MembershipWithUser> => {
+     // Check if user is the creator (cannot change creator's role)
+    const community = await prisma.community.findUnique({ where: { id: communityId } });
+    if (community?.creatorId === userId) {
+        throw new Error('Cannot change the community creator\'s role.');
+    }
+
+    // Update the membership role (will throw P2025 if not found)
+    return prisma.membership.update({
+        where: {
+            userId_communityId: { userId, communityId },
+        },
+        data: {
+            role: newRole,
+        },
+         include: { // Include user details in the response
+             user: { select: { id: true, name: true, avatarUrl: true } }
+        }
     });
 }; 

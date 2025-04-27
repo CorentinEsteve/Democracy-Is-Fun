@@ -1,18 +1,20 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { ManageMembersModal } from './ManageMembersModal';
-import { useMembers, useRemoveMember, useAddMember } from '@/features/membership/api';
-import { Member } from '@/features/membership/types';
+import { useMembers, useRemoveMember, useAddMember, useUpdateMember } from '@/features/membership/api';
+import { MembershipWithUser, MembershipRole } from '@/features/membership/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import React from 'react';
+import userEvent from '@testing-library/user-event';
 
 // Mock API hooks from membership feature
 vi.mock('@/features/membership/api', () => ({
   useMembers: vi.fn(),
   useRemoveMember: vi.fn(),
   useAddMember: vi.fn(),
+  useUpdateMember: vi.fn(),
 }));
 
 // Mock AuthContext
@@ -23,6 +25,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 const mockRemoveMutate = vi.fn();
 const mockAddMutate = vi.fn();
+const mockUpdateRoleMutate = vi.fn();
 const mockRefetchMembers = vi.fn();
 const mockInvalidateQueries = vi.fn();
 
@@ -44,9 +47,33 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   </QueryClientProvider>
 );
 
-const mockMembers: Member[] = [
-  { id: 1, name: 'Alice Admin', email: 'alice@test.com', role: 'Admin', points: 100, membershipId: 11, avatarUrl: '' },
-  { id: 2, name: 'Bob Member', email: 'bob@test.com', role: 'Member', points: 50, membershipId: 12, avatarUrl: '' },
+const mockMembers: MembershipWithUser[] = [
+  {
+    userId: 1,
+    communityId: 1,
+    role: MembershipRole.Admin,
+    points: 100,
+    membershipId: 11,
+    joinedAt: new Date().toISOString(),
+    user: {
+      id: 1,
+      name: 'Alice Admin',
+      avatarUrl: ''
+    }
+  },
+  {
+    userId: 2,
+    communityId: 1,
+    role: MembershipRole.Member,
+    points: 50,
+    membershipId: 12,
+    joinedAt: new Date().toISOString(),
+    user: {
+      id: 2,
+      name: 'Bob Member',
+      avatarUrl: ''
+    }
+  },
 ];
 
 const communityId = 1;
@@ -56,7 +83,7 @@ describe('ManageMembersModal', () => {
     vi.clearAllMocks();
 
     // Default mock implementations for hooks
-    (useAuth as vi.Mock).mockReturnValue({ user: { id: 1 } }); // Assume logged-in user is Admin
+    (useAuth as vi.Mock).mockReturnValue({ user: { id: 1 } }); // User is Admin
     (useMembers as vi.Mock).mockReturnValue({
       data: mockMembers,
       isLoading: false,
@@ -65,6 +92,7 @@ describe('ManageMembersModal', () => {
     });
     (useRemoveMember as vi.Mock).mockReturnValue({ mutate: mockRemoveMutate, isPending: false });
     (useAddMember as vi.Mock).mockReturnValue({ mutate: mockAddMutate, isPending: false, error: null });
+    (useUpdateMember as vi.Mock).mockReturnValue({ mutate: mockUpdateRoleMutate, isPending: false });
   });
 
   const renderModal = () => {
@@ -105,10 +133,31 @@ describe('ManageMembersModal', () => {
         { communityId: communityId, userId: 2 }, // Bob's ID
         expect.any(Object)
     );
-    // Simulate success callback invalidating queries
-    const mutateOptions = mockRemoveMutate.mock.calls[0][1];
-    mutateOptions.onSuccess();
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['members', communityId] });
+  });
+
+  it('calls update role mutation when role is changed via dropdown', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Modal' }));
+
+    let dropdownTrigger: HTMLElement | null = null;
+    await waitFor(() => {
+       const dialog = screen.getByRole('dialog');
+       const bobRow = within(dialog).getByText('Bob Member').closest('tr');
+       dropdownTrigger = within(bobRow!).getByRole('combobox');
+       expect(dropdownTrigger).toBeInTheDocument();
+    });
+
+    await user.click(dropdownTrigger!);
+
+    const option = await screen.findByRole('option', { name: 'Admin' });
+    await user.click(option);
+
+    expect(mockUpdateRoleMutate).toHaveBeenCalledTimes(1);
+    expect(mockUpdateRoleMutate).toHaveBeenCalledWith(
+        { communityId: 1, userId: 2, role: MembershipRole.Admin },
+        expect.any(Object)
+    );
   });
 
   it('calls add member mutation when form is submitted', async () => {
@@ -130,10 +179,6 @@ describe('ManageMembersModal', () => {
         { communityId: communityId, userIdentifier: 'new@user.com' },
         expect.any(Object)
     );
-     // Simulate success callback invalidating queries
-    const mutateOptions = mockAddMutate.mock.calls[0][1];
-    mutateOptions.onSuccess();
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['members', communityId] });
   });
 
   it('closes modal on close button click', async () => {

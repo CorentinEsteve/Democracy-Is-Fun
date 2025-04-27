@@ -10,23 +10,48 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { X, ShieldCheck, User } from 'lucide-react';
-import { Member } from '@/features/membership/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { X, ShieldCheck, User, Loader2 } from 'lucide-react';
+import { MembershipWithUser, MembershipRole } from '@/features/membership/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRemoveMember, useUpdateMember } from '@/features/membership/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
 interface MemberListProps {
-  members: Member[];
-  onRemove: (userId: number) => void;
-  isLoadingRemove: boolean;
-  communityId: number; // Needed to check current user's role in *this* community
+  members: MembershipWithUser[];
+  communityId: number;
 }
 
-export const MemberList: React.FC<MemberListProps> = ({ members, onRemove, isLoadingRemove, communityId }) => {
-  const { user } = useAuth();
+export const MemberList: React.FC<MemberListProps> = ({ members, communityId }) => {
+  const { user: authUser } = useAuth();
+  const queryClient = useQueryClient();
+  const [updatingMemberId, setUpdatingMemberId] = useState<number | null>(null);
 
-  // Find the current user's role *within this specific community's membership list*
-  const currentUserMembership = members.find(member => member.id === user?.id);
+  // Removal Mutation
+  const removeMemberMutation = useRemoveMember();
+  const handleRemove = (userIdToRemove: number) => {
+    setUpdatingMemberId(userIdToRemove);
+    removeMemberMutation.mutate({ communityId, userId: userIdToRemove }, {
+      onSettled: () => setUpdatingMemberId(null),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members', communityId] }),
+    });
+  };
+
+  // Role Update Mutation
+  const updateRoleMutation = useUpdateMember();
+  const handleRoleChange = (userIdToUpdate: number, newRole: MembershipRole) => {
+    setUpdatingMemberId(userIdToUpdate);
+    updateRoleMutation.mutate({ communityId, userId: userIdToUpdate, role: newRole }, {
+      onSettled: () => setUpdatingMemberId(null),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members', communityId] }),
+    });
+  };
+
+  // Use member.userId for comparisons
+  const currentUserMembership = members.find(member => member.userId === authUser?.id);
   const isAdmin = currentUserMembership?.role === 'Admin';
+  const isProcessing = removeMemberMutation.isPending || updateRoleMutation.isPending;
 
   return (
     <TooltipProvider>
@@ -41,47 +66,82 @@ export const MemberList: React.FC<MemberListProps> = ({ members, onRemove, isLoa
           </TableRow>
         </TableHeader>
         <TableBody>
-          {members.map((member, index) => (
-            <TableRow key={member.membershipId ?? `member-${index}`}>
-              <TableCell>
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={member.avatarUrl} alt={member.name ?? 'User'} />
-                  <AvatarFallback>{member.name?.charAt(0)?.toUpperCase() ?? '?'}</AvatarFallback>
-                </Avatar>
-              </TableCell>
-              <TableCell className="font-medium">{member.name ?? 'Unknown User'}</TableCell>
-              <TableCell>
-                 <span className="flex items-center gap-1">
-                    {member.role === 'Admin' ? <ShieldCheck className="h-4 w-4 text-blue-500" /> : <User className="h-4 w-4 text-muted-foreground"/>}
-                    {member.role}
-                 </span>
+          {members.map((member) => {
+            // Use member.userId for comparisons and state tracking
+            const isCurrentUser = authUser?.id === member.userId;
+            const isMemberBeingProcessed = updatingMemberId === member.userId;
+            const canPerformActions = isAdmin && !isCurrentUser;
+
+            // Ensure membershipId exists before using it as a key
+            const rowKey = member.membershipId ?? `user-${member.userId}`;
+
+            return (
+              <TableRow key={rowKey}>
+                <TableCell>
+                  <Avatar className="h-8 w-8">
+                    {/* Access nested user data for display */}
+                    <AvatarImage src={member.user.avatarUrl ?? undefined} alt={member.user.name ?? 'User'} />
+                    <AvatarFallback>{member.user.name?.charAt(0)?.toUpperCase() ?? '?'}</AvatarFallback>
+                  </Avatar>
                 </TableCell>
-              <TableCell>{member.points}</TableCell>
-              <TableCell className="text-right">
-                {isAdmin && user?.id !== member.id && ( // Admins can remove others, but not themselves
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onRemove(member.id)}
-                        disabled={isLoadingRemove}
-                        aria-label={`Remove ${member.name}`}
-                      >
-                        <X className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Remove {member.name}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                 {user?.id === member.id && (
-                    <span className="text-xs text-muted-foreground">(You)</span>
-                 )}
-              </TableCell>
-            </TableRow>
-          ))}
+                {/* Access nested user data for display */}
+                <TableCell className="font-medium">{member.user.name ?? 'Unknown User'}</TableCell>
+                <TableCell>
+                  {canPerformActions ? (
+                    <Select
+                      value={member.role}
+                      onValueChange={(value: MembershipRole) => handleRoleChange(member.userId, value)}
+                      disabled={isProcessing}
+                    >
+                      <SelectTrigger className="w-[120px] h-8 text-xs">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={MembershipRole.Admin}>Admin</SelectItem>
+                        <SelectItem value={MembershipRole.Member}>Member</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      {member.role === 'Admin' ? <ShieldCheck className="h-4 w-4 text-blue-500" /> : <User className="h-4 w-4 text-muted-foreground"/>}
+                      {member.role}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>{member.points}</TableCell>
+                <TableCell className="text-right w-[100px]">
+                  {isMemberBeingProcessed ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground inline-block" />
+                  ) : (
+                    <>
+                      {canPerformActions && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemove(member.userId)}
+                              disabled={isProcessing}
+                              aria-label={`Remove ${member.user.name}`}
+                              className="h-8 w-8"
+                            >
+                              <X className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Remove {member.user.name}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {isCurrentUser && (
+                        <span className="text-xs text-muted-foreground">(You)</span>
+                      )}
+                    </>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </TooltipProvider>

@@ -5,8 +5,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CommunityPage from '@/pages/CommunityPage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { useMembers, useRemoveMember, useAddMember } from '@/features/membership/api';
+import { MembershipWithUser, MembershipRole } from '@/features/membership/types';
 import { useProposals } from '@/features/proposals/api'; // Needed by CommunityPage
-import { Member } from '@/features/membership/types';
 import React from 'react';
 
 // Mock API hooks
@@ -14,6 +14,7 @@ vi.mock('@/features/membership/api', () => ({
   useMembers: vi.fn(),
   useRemoveMember: vi.fn(),
   useAddMember: vi.fn(),
+  useUpdateMember: vi.fn(() => ({ mutate: vi.fn() })),
 }));
 vi.mock('@/features/proposals/api', () => ({ // Mock proposals hooks as well
   useProposals: vi.fn(),
@@ -49,9 +50,34 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   </QueryClientProvider>
 );
 
-const mockMembers: Member[] = [
-  { id: 1, name: 'Alice Admin', email: 'alice@test.com', role: 'Admin', points: 100, membershipId: 11, avatarUrl: '' },
-  { id: 2, name: 'Bob Member', email: 'bob@test.com', role: 'Member', points: 50, membershipId: 12, avatarUrl: '' },
+// Update mockMembers to match MembershipWithUser structure
+const mockMembers: MembershipWithUser[] = [
+  {
+    userId: 1,
+    communityId: 1,
+    role: MembershipRole.Admin,
+    points: 100,
+    membershipId: 11,
+    joinedAt: new Date().toISOString(),
+    user: {
+      id: 1,
+      name: 'Alice Admin',
+      avatarUrl: ''
+    }
+  },
+  {
+    userId: 2,
+    communityId: 1,
+    role: MembershipRole.Member,
+    points: 50,
+    membershipId: 12,
+    joinedAt: new Date().toISOString(),
+    user: {
+      id: 2,
+      name: 'Bob Member',
+      avatarUrl: ''
+    }
+  },
 ];
 
 const communityId = 1;

@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MemberList } from './MemberList';
 import { AddMemberForm } from './AddMemberForm';
-import { useMembers, useRemoveMember } from '@/features/membership/api'; // Use hooks from membership
+import { useMembers, useRemoveMember, useUpdateMember } from '@/features/membership/api'; // Use hooks from membership
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, AlertCircle } from 'lucide-react';
 // import { useToast } from "@/ui/use-toast"; // Optional
@@ -34,6 +34,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ communit
   );
 
   const removeMemberMutation = useRemoveMember();
+  const updateRoleMutation = useUpdateMember(); // Added for loading state
 
   const handleRemoveMember = async (userId: number) => {
     removeMemberMutation.mutate(
@@ -51,6 +52,21 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ communit
       }
     );
   };
+
+  // // Handler for role update - now handled within MemberList
+  // const handleUpdateRole = async (userId: number, newRole: MembershipRole) => {
+  //   updateRoleMutation.mutate(
+  //     { communityId, userId, role: newRole },
+  //     {
+  //       onSuccess: () => {
+  //         queryClient.invalidateQueries({ queryKey: ['members', communityId] });
+  //       },
+  //       onError: (error) => {
+  //         console.error("Failed to update role:", error);
+  //       },
+  //     }
+  //   );
+  // };
 
   const handleModalOpenChange = (open: boolean) => {
      setIsOpen(open);
@@ -88,9 +104,10 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ communit
           {members && members.length > 0 && (
             <MemberList
               members={members}
-              onRemove={handleRemoveMember}
-              isLoadingRemove={removeMemberMutation.isPending}
               communityId={communityId}
+              // onRemove and onUpdateRole are now internal to MemberList
+              // isLoadingRemove={removeMemberMutation.isPending} // State managed internally
+              // isLoadingUpdate={updateRoleMutation.isPending} // State managed internally
             />
           )}
            {members && members.length === 0 && !isLoadingMembers && !membersError && (

@@ -18,5 +18,6 @@ router.delete('/:communityId', authenticate, authorizeAdmin, communityController
 router.get('/:communityId/members', authenticate, communityController.listMembers);
 router.post('/:communityId/members', authenticate, authorizeAdmin, communityController.addMember);
 router.delete('/:communityId/members/:userId', authenticate, authorizeAdmin, communityController.removeMember);
+router.patch('/:communityId/members/:userId', authenticate, authorizeAdmin, communityController.updateMemberRole);
 
 export default router; 

@@ -1,21 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/api/axios';
 import { useAuth } from '@/contexts/AuthContext'; // Assuming token is needed
-
-// Define the Member type (adjust based on actual API response)
-export interface Member {
-    id: number; // User ID
-    name: string;
-    email?: string; // Optional, depending on what the API returns
-    avatarUrl?: string;
-    membershipId: number; // The ID of the Membership record itself
-    role: 'Admin' | 'Member';
-    points: number;
-    // Add other relevant fields like join date if available
-}
+// import { MembershipRole } from '@prisma/client'; // Removed prisma import
+import { MembershipWithUser, MembershipRole } from './types'; // Import local types
 
 // --- Fetch Members --- 
-const fetchMembers = async (communityId: number, token: string | null): Promise<Member[]> => {
+const fetchMembers = async (communityId: number, token: string | null): Promise<MembershipWithUser[]> => {
     if (!token) throw new Error('Authentication required');
     const response = await apiClient.get(`/communities/${communityId}/members`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -25,10 +15,10 @@ const fetchMembers = async (communityId: number, token: string | null): Promise<
 
 export const useMembers = (communityId: number | undefined) => {
     const { token } = useAuth();
-    return useQuery<Member[], Error>({
-        queryKey: ['members', communityId], // Include communityId in the queryKey
+    return useQuery<MembershipWithUser[], Error>({
+        queryKey: ['members', communityId],
         queryFn: () => fetchMembers(communityId!, token),
-        enabled: !!communityId && !!token, // Only run query if communityId and token are available
+        enabled: !!communityId && !!token,
     });
 };
 
@@ -38,7 +28,7 @@ interface AddMemberPayload {
     userIdentifier: string; // Can be user ID or email
 }
 
-const addMember = async (payload: AddMemberPayload, token: string | null): Promise<Member> => {
+const addMember = async (payload: AddMemberPayload, token: string | null): Promise<MembershipWithUser> => {
     if (!token) throw new Error('Authentication required');
     const { communityId, userIdentifier } = payload;
     const response = await apiClient.post(`/communities/${communityId}/members`, 
@@ -54,15 +44,10 @@ export const useAddMember = () => {
     const queryClient = useQueryClient();
     const { token } = useAuth();
 
-    return useMutation<Member, Error, AddMemberPayload>({
+    return useMutation<MembershipWithUser, Error, AddMemberPayload>({
         mutationFn: (payload) => addMember(payload, token),
         onSuccess: (data, variables) => {
-            // Invalidate members query to refetch the list
             queryClient.invalidateQueries({ queryKey: ['members', variables.communityId] });
-            // Optionally update the cache directly for faster UI update
-            // queryClient.setQueryData(['members', variables.communityId], (oldData: Member[] | undefined) => 
-            //    oldData ? [...oldData, data] : [data]
-            // );
         },
         onError: (error) => {
             console.error("Error adding member:", error);
@@ -92,16 +77,46 @@ export const useRemoveMember = () => {
     return useMutation<void, Error, RemoveMemberPayload>({
         mutationFn: (payload) => removeMember(payload, token),
         onSuccess: (_, variables) => {
-            // Invalidate members query to refetch
             queryClient.invalidateQueries({ queryKey: ['members', variables.communityId] });
-            // Optionally update cache by removing the member
-            // queryClient.setQueryData(['members', variables.communityId], (oldData: Member[] | undefined) => 
-            //    oldData ? oldData.filter(member => member.id !== variables.userId) : []
-            // );
         },
          onError: (error) => {
             console.error("Error removing member:", error);
              // Handle error
+        },
+    });
+};
+
+// --- Update Member Role --- 
+interface UpdateMemberPayload {
+    communityId: number;
+    userId: number;
+    role: MembershipRole; // Use enum type if defined
+}
+
+const updateMemberRole = async (payload: UpdateMemberPayload, token: string | null): Promise<MembershipWithUser> => {
+    if (!token) throw new Error('Authentication required');
+    const { communityId, userId, role } = payload;
+    const response = await apiClient.patch(`/communities/${communityId}/members/${userId}`, 
+        { role }, // Send role in request body
+        {
+            headers: { Authorization: `Bearer ${token}` },
+        }
+    );
+    return response.data; // Assuming API returns the updated member details
+};
+
+export const useUpdateMember = () => {
+    const queryClient = useQueryClient();
+    const { token } = useAuth();
+
+    return useMutation<MembershipWithUser, Error, UpdateMemberPayload>({
+        mutationFn: (payload) => updateMemberRole(payload, token),
+        onSuccess: (data, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['members', variables.communityId] });
+        },
+        onError: (error) => {
+            console.error("Error updating member role:", error);
+            // Handle error (e.g., show toast notification)
         },
     });
 }; 

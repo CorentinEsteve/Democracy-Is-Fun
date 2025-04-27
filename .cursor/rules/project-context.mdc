@@ -5,13 +5,12 @@ alwaysApply: true
 ---
 Votons Fun! – Comprehensive Functional Specifications (English)
 
-1. Overview
-Purpose  
-A web platform (ReactJS frontend / NodeJS + Prisma backend) designed to help communities make collective decisions in a fun, fair, and interactive way. Users can join multiple communities to propose, discuss, and vote on activities.
+1. Overview  
+A web platform (ReactJS frontend / NodeJS + Prisma backend) designed to help communities make collective decisions in a fun, fair, and interactive way. Users can join multiple communities to propose, discuss, vote, and coordinate activities.
 
 Core Modules  
 - Community management & roles  
-- Real-time chat  
+- Chat (polling, with future real-time upgrade)  
 - Activity proposals & dynamic voting  
 - Collaborative notes  
 - Integrated calendar & external sync  
@@ -22,133 +21,121 @@ Core Modules
 | Role   | Main Permissions                                                                        |
 |--------|-----------------------------------------------------------------------------------------|
 | Admin  | • Create/archive communities  
-• Add/remove members  
-• Promote/demote other admins  
+• Add/remove/promote/demote members  
 • Edit community settings (name, image, description)                                      |
 | Member | • Propose activities  
-• Vote (👍/👎/✋)  
+• Change and re-cast votes (👍/👎/✋)  
 • Use chat and notes  
 • View calendar & leaderboard                                        |
 
-Community Creation  
-- Fields: name, description, group image, initial member list (invite link or search)  
-- Creator defaults to Admin
-
-3. Data Models (Key Entities)
+3. Data Models
 
 1. User  
-   - id, name, email, avatarUrl, etc.
+   - id, name, email, avatarUrl, createdAt, updatedAt  
 2. Community  
-   - id, name, description, imageUrl, creatorId
+   - id, name, description, imageUrl, creatorId, createdAt, updatedAt  
 3. Membership  
-   - userId, communityId, role (Admin/Member), points
+   - userId, communityId, role (Admin/Member), points, joinedAt  
 4. Proposal  
-   - id, communityId, initiatorId, title, description, location, dateTime, tags[], deadline, quorumPct, status (Active/Approved/Rejected), parentProposalId
+   - id, communityId, initiatorId, title, description, location, dateTime, tags[], deadline, quorumPct, status (Active/Approved/Rejected/Tied), parentProposalId  
 5. Vote  
-   - id, proposalId, voterId, voteType (For/Against/Neutral)
-6. Opposition  
-   - id, originalProposalId, alternativeProposalId
+   - id, proposalId, voterId, voteType (For/Against/Neutral), votedAt  
+6. Opposition (optional)  
+   - id, originalProposalId, alternativeProposalId  
 7. Note  
-   - id, communityId, authorId, content, timestamp
+   - id, communityId, authorId, content, timestamp  
 8. Event  
-   - id, proposalId, communityId, title, dateTime, location
+   - id, proposalId, communityId, title, dateTime, location, createdAt  
+9. Message  
+   - id, communityId, authorId, content, createdAt  
 
 4. UI Layout
 
-|------------------------------------------------------------------------|
-| [🔍 + Communities] | [💬 Chat | 📆 Calendar | 📝 Notes] | [📇 Proposals] |
-|------------------------------------------------------------------------|
+|—————————–|————————|———————––|
+| [🔍 Communities]            | [💬 Chat | 📆 Calendar | 📝 Notes]  | [📇 Proposals Tabs]    |
+|—————————–|————————|———————––|
 
-4.1. Left Panel: Communities
+### 4.1. Left Panel: Communities
+
 - Search bar to filter by name  
-- Scrollable list of communities the user belongs to  
-- + button to create a new community  
-- Selecting a community loads its workspace in the center and right panels
+- Scrollable list, with “+” to create a community  
+- Selecting loads that community’s workspace
 
-4.2. Center Panel: Chat / Calendar / Notes
-- Tabs at the top: Chat / Calendar / Notes
+### 4.2. Center Panel: Chat / Calendar / Notes
 
-Chat  
-- Real-time message feed  
-- Auto-generated message for each proposal:  
-  "Proposal by Alex: Hiking at 3 PM (Tag: Outdoors)"  
-- Message input field + + Propose button
+**Chat** (polling)
+- Message list with auto-generated proposal posts  
+- MessageInput + “Propose” button opens proposal modal  
 
-Calendar  
-- Monthly & weekly views of approved events  
-- Clicking an event opens a details popup with a button to export to Google/Outlook/iCloud
+**Calendar**
+- List or calendar grid of approved events  
+- Each event card shows title, date/time, and “📅” export button  
 
-Notes  
-- Collaborative text area (free-form text, bullet lists)  
-- Real-time saving
+**Notes**
+- Collaborative note list  
+- Create/Edit/Delete via a modal  
 
-4.3. Right Panel: Proposals
-- Tabs: Active / Oppositions / Archived
+### 4.3. Right Panel: Proposals Tabs
 
-Active Proposals
-- Compact cards displaying: title, initiator (+ avatar), location, date/time, tags (badges)  
-- Deadline timer (countdown)  
-- Vote buttons: 👍 / 👎 / ✋ (neutral), with live counters  
-  - Initiator automatically casts a 👍 on creation  
-- Waiting voters list at the bottom (avatars or names) to show who hasn't voted yet  
-- Quorum: minimum vote participation percentage (set at creation)  
-- Early close: if an insurmountable majority is reached before the deadline, close the vote immediately  
-- Tie handling: if votes are tied at deadline, leave the proposal active until manual action  
-- Action buttons: ✏️ Edit (opens pre-filled popup, creating a linked revision) and ⚔️ Oppose (create an alternative proposal)  
-- Visual cues: green glow for proposals not yet voted by the user; blue glow for proposals currently in voting
+**Tabs: Active | Oppositions | Archived**
 
-Oppositions
-- List of alternative proposals linked to the original  
-- Same card layout and voting mechanics to determine final winner
+**Active**  
+- Cards show title, initiator (avatar), location, date/time, tags  
+- Countdown timer to deadline  
+- Vote buttons 👍/👎/✋ (clickable anytime before close) with live counts  
+- Quorum indicator (e.g. “5/10 votes (quorum 80%)”)  
+- Waiting-voters list  
+- Glow: green=not voted, blue=voted & still active  
+- Action buttons: ✏️ Edit (revision flow), ⚔️ Oppose (alternative flow)  
 
-Archived
-- Proposals that were rejected by majority or expired by deadline  
-- Read-only, no voting allowed
+**Oppositions**  
+- Alternative proposals linked to an original  
+
+**Archived**  
+- Rejected or expired proposals (read-only)
 
 5. Detailed Workflows
 
-5.1. Creating a Proposal
-1. Click + Propose in Chat tab  
-2. Display popup with fields: title, description, location, date/time, tags, deadline (default: 1 week), quorumPct (default: 100%)  
-3. Submit: the proposal appears in Active tab, initiator auto-votes 👍, and an auto-message posts in chat
+#### 5.1. Creating a Proposal
+1. Click “+ Propose” in Chat  
+2. Popup: title, description, location, dateTime, tags, deadline (default 1wk), quorumPct (default 100%)  
+3. Submit → proposal appears in Active, auto-vote by initiator, chat post
 
-5.2. Voting Process
-1. Members vote (👍, 👎, or ✋) until deadline expiry or early close  
-2. Vote closes when either:  
-   - Early close: insurmountable majority is reached  
-   - Deadline reached AND quorumPct and >50% majority of votes cast  
-3. Status becomes Approved or Rejected accordingly  
-4. In case of a tie at deadline, proposal remains Active until edited or removed
+#### 5.2. Voting Process
+- Users can **change** their vote until close  
+- Close triggers:
+  - **Early**: insurmountable majority  
+  - **Deadline**: quorumPct met + >50% majority  
+  - **Tie**: remains Active until manual action  
+- Status flips to Approved/Rejected
 
-5.3. Editing & Opposition
-- Edit: clicking ✏️ opens the pre-filled popup; submitting creates a new linked proposal revision  
-- Opposition: clicking ⚔️ generates an alternative proposal; both original and alternative are put to vote
+#### 5.3. Editing & Opposition
+- **Edit**: opens pre-filled modal, creates a new linked revision  
+- **Oppose**: creates an alternative proposal; both up for vote
 
-5.4. Post-Approval
-1. Status switches to Approved ✅  
-2. Event created in the integrated calendar  
-3. 📅 icon appears on the approved card for export to Google Calendar, Outlook, or iCloud  
-4. Auto-chat message: "Event approved: <Title> on <Date> – added to your calendar"  
-5. Initiator receives 10 points; leaderboard updates
-
+#### 5.4. Post-Approval
+1. Proposal → Approved ✅  
+2. Event record created  
+3. “📅” icon on card → export ICS to Google/Outlook/iCloud  
+4. Chat: “Event approved: …” auto-message  
+5. Points: +10 to initiator; update leaderboard
 6. Gamification
-- Points: +10 for each approved proposal  
-- Leaderboard: top contributors highlighted in community details (profile avatars + points)
+- **Points**: +10 for each approved proposal  
+- **Leaderboard**: community details list sorted by points
 
 7. UX & Accessibility
-- Apple-inspired design: clean layouts, rounded corners, light drop shadows, San Francisco-like font  
-- Popups closable by clicking outside or using the close button  
-- Dark/Light modes with smooth transitions  
-- Subtle micro-interactions for hover and click feedback  
-- Full ARIA labeling, keyboard navigation, adjustable font sizes
+- Apple-inspired: clean, rounded corners, soft shadows  
+- Popups close on outside click  
+- Dark/Light mode toggle (future)  
+- ARIA labels, keyboard nav, responsive layouts  
+- Error states & friendly toasts for API errors
 
-8. Future Enhancements (MVP+)
-- Mid-deadline visual reminders  
-- Online presence indicators (active status)  
-- Inline statistics & insights (proposals per tag, participation rates)  
-- Advanced filters (by tag, date, initiator)  
-- @mentions & #hashtags support in chat and notes  
-- Automatic archiving (e.g., proposals older than 1 year)  
-- CSV export of proposals and vote results  
-- Bidirectional calendar sync  
-- Vote delegation feature ("vote for me")
+8. Next Enhancements (MVP+)
+- **Deadline visualization** on cards  
+- **Tie/Early close logic** in UI & backend  
+- **Archived/Oppositions** tabs UI  
+- **Real-time chat** via WebSockets  
+- **Leaderboards** page  
+- **Form validations** & empty states  
+- **End-to-end tests** for core flows  
+- **Advanced filters**, @mentions, calendar sync, vote delegation

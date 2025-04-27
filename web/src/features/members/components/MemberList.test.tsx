@@ -1,9 +1,12 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { MemberList } from './MemberList';
-import { Member } from '@/features/membership/types';
+import { MembershipWithUser, MembershipRole } from '@/features/membership/types';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useRemoveMember, useUpdateMember } from '@/features/membership/api';
 import React from 'react';
+import userEvent from '@testing-library/user-event';
 
 // Mock AuthContext
 vi.mock('@/contexts/AuthContext', () => ({
@@ -11,13 +14,72 @@ vi.mock('@/contexts/AuthContext', () => ({
   AuthProvider: ({ children }: {children: React.ReactNode}) => <div>{children}</div> // Mock provider
 }));
 
-const mockMembers: Member[] = [
-  { id: 1, name: 'Alice Admin', email: 'alice@test.com', role: 'Admin', points: 100, membershipId: 11, avatarUrl: '' },
-  { id: 2, name: 'Bob Member', email: 'bob@test.com', role: 'Member', points: 50, membershipId: 12, avatarUrl: '' },
-  { id: 3, name: 'Charlie Member', email: 'charlie@test.com', role: 'Member', points: 20, membershipId: 13, avatarUrl: '' },
-];
+// Mock API Hooks
+const mockRemoveMutate = vi.fn();
+const mockUpdateRoleMutate = vi.fn();
+vi.mock('@/features/membership/api', () => ({
+    useRemoveMember: () => ({ mutate: mockRemoveMutate, isPending: false }),
+    useUpdateMember: () => ({ mutate: mockUpdateRoleMutate, isPending: false }),
+}));
 
-const mockOnRemove = vi.fn();
+// Mock QueryClient
+const mockInvalidateQueries = vi.fn();
+vi.mock('@tanstack/react-query', async () => {
+  const original = await vi.importActual('@tanstack/react-query');
+  return {
+    ...original,
+    useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+  };
+});
+
+const queryClient = new QueryClient();
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>{children}</AuthProvider>
+  </QueryClientProvider>
+);
+
+const mockMembers: MembershipWithUser[] = [
+  {
+    userId: 1,
+    communityId: 1,
+    role: MembershipRole.Admin,
+    points: 100,
+    membershipId: 11,
+    joinedAt: new Date().toISOString(),
+    user: {
+      id: 1,
+      name: 'Alice Admin',
+      avatarUrl: ''
+    }
+  },
+  {
+    userId: 2,
+    communityId: 1,
+    role: MembershipRole.Member,
+    points: 50,
+    membershipId: 12,
+    joinedAt: new Date().toISOString(),
+    user: {
+      id: 2,
+      name: 'Bob Member',
+      avatarUrl: ''
+    }
+  },
+  {
+    userId: 3,
+    communityId: 1,
+    role: MembershipRole.Member,
+    points: 20,
+    membershipId: 13,
+    joinedAt: new Date().toISOString(),
+    user: {
+      id: 3,
+      name: 'Charlie Member',
+      avatarUrl: ''
+    }
+  },
+];
 
 describe('MemberList', () => {
   beforeEach(() => {
@@ -26,12 +88,12 @@ describe('MemberList', () => {
 
   const renderWithAuth = (ui: React.ReactElement, user: { id: number } | null) => {
     (useAuth as vi.Mock).mockReturnValue({ user });
-    return render(<AuthProvider>{ui}</AuthProvider>);
+    return render(ui, { wrapper });
   };
 
   it('renders members correctly', () => {
     renderWithAuth(
-      <MemberList members={mockMembers} onRemove={mockOnRemove} isLoadingRemove={false} communityId={1} />,
+      <MemberList members={mockMembers} communityId={1} />,
       { id: 1 } // Assume current user is Alice (Admin)
     );
 
@@ -44,55 +106,80 @@ describe('MemberList', () => {
     expect(screen.getByText('100')).toBeInTheDocument(); // Alice's points
   });
 
-  it('shows remove button for admins on other members', () => {
+  it('shows remove button and role dropdown for admins on other members', () => {
     renderWithAuth(
-      <MemberList members={mockMembers} onRemove={mockOnRemove} isLoadingRemove={false} communityId={1} />,
+      <MemberList members={mockMembers} communityId={1} />,
       { id: 1 } // Current user is Admin
     );
 
-    // Admin sees remove buttons for Bob and Charlie
+    // Admin sees remove buttons & dropdowns for Bob and Charlie
     expect(screen.getByLabelText('Remove Bob Member')).toBeInTheDocument();
     expect(screen.getByLabelText('Remove Charlie Member')).toBeInTheDocument();
-    // Admin does NOT see remove button for themselves
+    
+    // Find dropdowns within specific rows (more robust)
+    const bobRow = screen.getByText('Bob Member').closest('tr');
+    const charlieRow = screen.getByText('Charlie Member').closest('tr');
+    expect(within(bobRow!).getByRole('combobox')).toBeInTheDocument();
+    expect(within(charlieRow!).getByRole('combobox')).toBeInTheDocument();
+
+    // Admin does NOT see remove button/dropdown for themselves
     expect(screen.queryByLabelText('Remove Alice Admin')).not.toBeInTheDocument();
+    const aliceRow = screen.getByText('Alice Admin').closest('tr');
+    // Ensure Alice's row does NOT contain a combobox trigger
+    expect(within(aliceRow!).queryByRole('combobox')).not.toBeInTheDocument(); 
   });
 
-  it('hides remove button for non-admins', () => {
+  it('hides remove button and role dropdown for non-admins', () => {
     renderWithAuth(
-      <MemberList members={mockMembers} onRemove={mockOnRemove} isLoadingRemove={false} communityId={1} />,
+      <MemberList members={mockMembers} communityId={1} />,
       { id: 2 } // Current user is Bob (Member)
     );
 
-    // Member sees no remove buttons
+    // Member sees no remove buttons or role dropdowns
     expect(screen.queryByLabelText(/Remove/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
-  it('calls onRemove when remove button is clicked', () => {
+  it('calls remove mutation when remove button is clicked', () => {
     renderWithAuth(
-      <MemberList members={mockMembers} onRemove={mockOnRemove} isLoadingRemove={false} communityId={1} />,
+      <MemberList members={mockMembers} communityId={1} />,
       { id: 1 } // Current user is Admin
     );
 
     const removeBobButton = screen.getByLabelText('Remove Bob Member');
     fireEvent.click(removeBobButton);
 
-    expect(mockOnRemove).toHaveBeenCalledTimes(1);
-    expect(mockOnRemove).toHaveBeenCalledWith(2); // Bob's ID
+    expect(mockRemoveMutate).toHaveBeenCalledTimes(1);
+    expect(mockRemoveMutate).toHaveBeenCalledWith({ communityId: 1, userId: 2 }, expect.any(Object));
   });
 
-  it('disables remove button when isLoadingRemove is true', () => {
+  it('calls update role mutation when role is changed', async () => {
+    const user = userEvent.setup();
     renderWithAuth(
-      <MemberList members={mockMembers} onRemove={mockOnRemove} isLoadingRemove={true} communityId={1} />,
+      <MemberList members={mockMembers} communityId={1} />,
       { id: 1 } // Current user is Admin
     );
 
-    expect(screen.getByLabelText('Remove Bob Member')).toBeDisabled();
-    expect(screen.getByLabelText('Remove Charlie Member')).toBeDisabled();
+    // Find Bob's row and the dropdown trigger within it
+    const bobRow = screen.getByText('Bob Member').closest('tr');
+    const dropdownTrigger = within(bobRow!).getByRole('combobox');
+    
+    await user.click(dropdownTrigger);
+
+    // Find and click the option - ensure it's available after the click
+    const option = await screen.findByRole('option', { name: 'Admin' }); 
+    await user.click(option);
+
+    expect(mockUpdateRoleMutate).toHaveBeenCalledTimes(1);
+    expect(mockUpdateRoleMutate).toHaveBeenCalledWith(
+        { communityId: 1, userId: 2, role: MembershipRole.Admin }, 
+        expect.any(Object)
+    );
   });
 
-   it('shows "(You)" indicator for the current user', () => {
+  it('shows "(You)" indicator for the current user', () => {
     renderWithAuth(
-      <MemberList members={mockMembers} onRemove={mockOnRemove} isLoadingRemove={false} communityId={1} />,
+      <MemberList members={mockMembers} communityId={1} />,
       { id: 2 } // Current user is Bob (Member)
     );
     const bobRow = screen.getByText('Bob Member').closest('tr');
@@ -101,5 +188,4 @@ describe('MemberList', () => {
     const aliceRow = screen.getByText('Alice Admin').closest('tr');
     expect(aliceRow).not.toHaveTextContent('(You)');
   });
-
 }); 

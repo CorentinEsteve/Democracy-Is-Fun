@@ -1,14 +1,30 @@
-// Define the Member type (adjust based on actual API response)
-export interface Member {
-    id: number; // User ID
-    name: string;
-    email?: string; // Optional, depending on what the API returns
-    avatarUrl?: string;
-    membershipId: number; // The ID of the Membership record itself
-    role: 'Admin' | 'Member';
-    points: number;
-    // Add other relevant fields like join date if available
+// Define role enum locally for frontend use
+export enum MembershipRole {
+    Admin = 'Admin',
+    Member = 'Member',
 }
+
+// Define User details needed within MembershipWithUser
+// (Assuming a global User type isn't readily available/imported here)
+interface UserSubset {
+  id: number;
+  name: string;
+  avatarUrl?: string | null;
+}
+
+// Define type directly matching the API response structure
+export type MembershipWithUser = {
+   // Fields directly from the Membership model
+   userId: number;
+   communityId: number;
+   role: MembershipRole;
+   points: number;
+   joinedAt: string; // Or Date, depending on API serialization
+   membershipId: number; // Assuming Prisma adds this based on @@id([userId, communityId]) or a separate ID
+
+   // Nested user object
+   user: UserSubset;
+};
 
 // Type for adding a member payload
 export interface AddMemberPayload {
