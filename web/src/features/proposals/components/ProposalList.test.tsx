@@ -4,10 +4,24 @@ import ProposalList from './ProposalList';
 import { Proposal, PartialUser } from '../types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { useMembers } from '@/features/membership/api';
+
+// Mock hooks used by ProposalCard
+vi.mock('@/features/membership/api', () => ({
+    useMembers: vi.fn(),
+}));
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: vi.fn(),
+  // Provide a basic mock AuthProvider
+  AuthProvider: ({ children }: {children: React.ReactNode}) => <div>{children}</div> 
+}));
 
 const queryClient = new QueryClient();
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>{children}</AuthProvider> 
+  </QueryClientProvider>
 );
 
 // Helper from ProposalCard.test
@@ -40,6 +54,18 @@ const createMockProposal = (overrides: Partial<Proposal> = {}): Proposal => {
 describe('ProposalList', () => {
     const mockOnVote = vi.fn();
     const currentUserId = 1;
+
+    beforeEach(() => {
+        // Reset mocks before each test
+        vi.clearAllMocks();
+        // Provide default mocks for hooks used by ProposalCard
+        (useAuth as vi.Mock).mockReturnValue({ user: { id: currentUserId } });
+        (useMembers as vi.Mock).mockReturnValue({ 
+            data: [], // Provide empty array or mock data as needed by Card
+            isLoading: false, 
+            error: null 
+        });
+    });
 
     it('renders a list of ProposalCards', () => {
         const proposals = [

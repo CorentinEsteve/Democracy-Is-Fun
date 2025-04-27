@@ -4,6 +4,13 @@ import ProposalCard from './ProposalCard';
 import { Proposal, PartialUser, Vote, VoteType, ProposalStatus } from '../types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+import { useMembers } from '@/features/membership/api'; // Import hook to mock
+
+// Mock the useMembers hook
+vi.mock('@/features/membership/api', () => ({
+    useMembers: vi.fn(),
+    // Keep other potential exports if they exist and are needed
+}));
 
 const queryClient = new QueryClient();
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -29,15 +36,16 @@ const createMockProposal = (overrides: Partial<Proposal> = {}): Proposal => {
         dateTime: now.toISOString(),
         tags: ['testing', 'default'],
         deadline: futureDate,
-        quorumPct: 50,
+        quorumPct: 80,
         status: 'Active',
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
         initiator: initiator,
         votes: [
-             { id: 1, proposalId: 10, voterId: initiator.id, voteType: 'For', voter: initiator },
+             { id: 1, proposalId: 10, voterId: 1, voteType: 'For', voter: { id: 1, name: 'Alice' } },
+             { id: 2, proposalId: 10, voterId: 2, voteType: 'Against', voter: { id: 2, name: 'Bob' } },
         ],
-        waitingVoters: [voter1, voter2],
+        waitingVoters: [{ id: 3, name: 'Charlie' }],
         ...overrides,
     };
     return defaultProposal;
@@ -45,7 +53,21 @@ const createMockProposal = (overrides: Partial<Proposal> = {}): Proposal => {
 
 describe('ProposalCard', () => {
     const mockOnVote = vi.fn();
-    const currentUserId = 2; // User 'Bob'
+    const currentUserId = 3; // Use a different user ID for some tests
+
+    beforeEach(() => {
+        mockOnVote.mockClear();
+        // Reset mock implementation for useMembers before each test
+        (useMembers as vi.Mock).mockReturnValue({ 
+            data: [
+                { userId: 1, user: { id: 1, name: 'Alice' } }, // Mock 3 members
+                { userId: 2, user: { id: 2, name: 'Bob' } },
+                { userId: 3, user: { id: 3, name: 'Charlie' } },
+            ], 
+            isLoading: false, 
+            error: null 
+        });
+    });
 
     // Helper to find buttons using aria-label
     const getVoteButton = (voteType: 'For' | 'Against' | 'Neutral') => {
@@ -66,10 +88,6 @@ describe('ProposalCard', () => {
         return button;
     }
 
-    beforeEach(() => {
-        mockOnVote.mockClear();
-    });
-
     it('renders proposal details correctly', () => {
         const proposal = createMockProposal();
         render(<ProposalCard proposal={proposal} onVote={mockOnVote} currentUserId={currentUserId} />, { wrapper });
@@ -85,17 +103,40 @@ describe('ProposalCard', () => {
         expect(getVoteButton('For')).toBeInTheDocument(); 
         expect(getVoteButton('Against')).toBeInTheDocument();
         expect(getVoteButton('Neutral')).toBeInTheDocument();
-        // Check text content if needed
-        expect(getVoteButton('For')).toHaveTextContent('1');
-        expect(getVoteButton('Against')).toHaveTextContent('0');
+        // Correct assertions for vote counts based on default mock data
+        expect(getVoteButton('For')).toHaveTextContent('1'); // Default has 1 For vote
+        expect(getVoteButton('Against')).toHaveTextContent('1'); // Default has 1 Against vote
         expect(getVoteButton('Neutral')).toHaveTextContent('0');
     });
 
-    it('displays deadline countdown', async () => {
-        const proposal = createMockProposal();
+    it('displays deadline countdown and quorum info', async () => {
+        const futureDate = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(); // 3 hours from now
+        const proposal = createMockProposal({ 
+            deadline: futureDate,
+            votes: [ // Example: 2 votes cast
+                 { id: 1, proposalId: 10, voterId: 1, voteType: 'For', voter: { id: 1, name: 'Alice' } },
+                 { id: 2, proposalId: 10, voterId: 2, voteType: 'Against', voter: { id: 2, name: 'Bob' } },
+            ],
+            quorumPct: 80, // Set quorum
+        });
+        
         render(<ProposalCard proposal={proposal} onVote={mockOnVote} currentUserId={currentUserId} />, { wrapper });
-        // Check if countdown text exists (e.g., "in 7 days") - exact text depends on date-fns
-        expect(await screen.findByText(/in \d+ days|\d+ days left/i)).toBeInTheDocument(); 
+        
+        // Check quorum text (2 votes / 3 members from mock)
+        expect(screen.getByTestId('quorum-info')).toHaveTextContent('2 of 3 votes (quorum 80%)');
+
+        // Check if countdown text exists (e.g., "3 hours left")
+        // Use findByText for async nature of countdown, but formatDistanceToNowStrict is sync here
+        // Let's use getByText with a matcher
+        expect(screen.getByText(/Time left: 3 hours/i)).toBeInTheDocument(); 
+    });
+
+    it('displays Expired when deadline has passed', () => {
+        const pastDate = new Date(Date.now() - 1000).toISOString();
+        const proposal = createMockProposal({ deadline: pastDate });
+        render(<ProposalCard proposal={proposal} onVote={mockOnVote} currentUserId={currentUserId} />, { wrapper });
+        expect(screen.getByText('Expired')).toBeInTheDocument();
+        expect(screen.queryByText(/Time left:/)).not.toBeInTheDocument();
     });
 
     it('calls onVote when a vote button is clicked by eligible user', () => {
@@ -146,7 +187,7 @@ describe('ProposalCard', () => {
     });
 
      it('shows green glow if user has not voted and proposal is active', () => {
-        const proposal = createMockProposal(); // User 2 (Bob) hasn't voted
+        const proposal = createMockProposal(); // User 3 (Charlie) hasn't voted
         const { container } = render(<ProposalCard proposal={proposal} onVote={mockOnVote} currentUserId={currentUserId} />, { wrapper });
         // Check for a class containing shadow-green or similar
         expect(container.firstChild).toHaveClass(/shadow-green-500/);
@@ -181,15 +222,13 @@ describe('ProposalCard', () => {
     });
 
     it('displays waiting voters list', () => {
-         const proposal = createMockProposal(); // Bob and Charlie waiting
+         const proposal = createMockProposal(); // Default waiting list has only Charlie
          render(<ProposalCard proposal={proposal} onVote={mockOnVote} currentUserId={currentUserId} />, { wrapper });
 
          expect(screen.getByText('Waiting for:')).toBeInTheDocument();
-         // Check for fallback initials instead of img role
-         expect(screen.getByText('B')).toBeInTheDocument(); // Bob's initial
-         expect(screen.getByText('C')).toBeInTheDocument(); // Charlie's initial
-         // Check initiator avatar separately if needed
-         const initiatorAvatarFallback = screen.getByText('A');
-         expect(initiatorAvatarFallback).toBeInTheDocument();
+         // Check only for Charlie's initial ('C') as per default mock data
+         expect(screen.queryByText('A')).not.toBeInTheDocument(); // Initiator shouldn't be in waiting list display
+         expect(screen.queryByText('B')).not.toBeInTheDocument(); // Bob voted, not waiting
+         expect(screen.getByText('C')).toBeInTheDocument(); // Charlie is waiting
      });
 }); 

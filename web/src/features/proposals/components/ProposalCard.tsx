@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { formatDistanceToNow, parseISO, isPast } from 'date-fns';
+import { formatDistanceToNowStrict, parseISO, isPast } from 'date-fns';
 import { ThumbsUp, ThumbsDown, Hand } from 'lucide-react';
 
 import { Proposal, VoteType, PartialUser, Vote } from '../types';
@@ -9,6 +9,7 @@ import { Button } from '@/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from '@/lib/utils';
+import { useMembers } from '@/features/membership/api';
 
 interface ProposalCardProps {
   proposal: Proposal;
@@ -25,50 +26,34 @@ const getInitials = (name: string = '') => {
     .toUpperCase();
 };
 
-const Countdown = ({ deadline }: { deadline: string }) => {
-  const [timeLeft, setTimeLeft] = useState('');
-
-  useEffect(() => {
-    const calculateTimeLeft = () => {
-      const deadlineDate = parseISO(deadline);
-      if (isPast(deadlineDate)) {
-        setTimeLeft('Closed');
-      } else {
-        setTimeLeft(formatDistanceToNow(deadlineDate, { addSuffix: true }));
-      }
-    };
-
-    calculateTimeLeft();
-    const interval = setInterval(calculateTimeLeft, 60000); // Update every minute
-
-    return () => clearInterval(interval);
-  }, [deadline]);
-
-  return <span className="text-sm text-muted-foreground">{timeLeft}</span>;
-};
-
 const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onVote, currentUserId }) => {
+  const { data: members = [] } = useMembers(proposal.communityId);
+
   const userVote = proposal.votes.find((v) => v.voterId === currentUserId);
   const hasVoted = !!userVote;
-  const isDeadlinePassed = isPast(parseISO(proposal.deadline));
+  const deadlineDate = parseISO(proposal.deadline);
+  const isDeadlinePassed = isPast(deadlineDate);
   const isActive = proposal.status === 'Active' && !isDeadlinePassed;
 
   const getVoteCount = (type: VoteType) => proposal.votes.filter(v => v.voteType === type).length;
 
   const handleVote = (voteType: VoteType) => {
-    if (!currentUserId || !isActive || hasVoted) return; // Prevent voting if not logged in, inactive, or already voted
+    if (!currentUserId || !isActive || hasVoted) return;
     onVote(proposal.id, voteType);
   };
 
   const cardClasses = cn(
-    'transition-shadow duration-300', // Base transition
-    !isDeadlinePassed && proposal.status === 'Active' && !hasVoted && 'shadow-lg shadow-green-500/30', // Green glow for not voted
-    !isDeadlinePassed && proposal.status === 'Active' && hasVoted && 'shadow-lg shadow-blue-500/30' // Blue glow for voted
+    'transition-shadow duration-300',
+    isActive && !hasVoted && 'shadow-lg shadow-green-500/30',
+    isActive && hasVoted && 'shadow-lg shadow-blue-500/30'
   );
 
   const voteCountFor = getVoteCount('For');
   const voteCountAgainst = getVoteCount('Against');
   const voteCountNeutral = getVoteCount('Neutral');
+
+  const totalMembers = members.length;
+  const votesCount = proposal.votes.length;
 
   return (
     <Card className={cardClasses}>
@@ -96,7 +81,15 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onVote, currentUs
       </CardContent>
       <CardFooter className="flex flex-col items-start space-y-3">
          <div className="flex justify-between w-full items-center">
-            <Countdown deadline={proposal.deadline} />
+            <div className="text-sm text-muted-foreground">
+                {isDeadlinePassed ? (
+                    <span className="text-red-500">Expired</span>
+                ) : (
+                    <span>
+                        Time left: {formatDistanceToNowStrict(deadlineDate, { addSuffix: false })}
+                    </span>
+                )}
+            </div>
             <div className="flex space-x-1" data-testid="vote-buttons">
                 <Button 
                     variant={userVote?.voteType === 'For' ? 'default' : 'outline'} 
@@ -129,6 +122,9 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onVote, currentUs
                      <Hand className="h-4 w-4 mr-1" /> {voteCountNeutral}
                 </Button>
             </div>
+         </div>
+         <div className="text-sm text-gray-500 w-full pt-1" data-testid="quorum-info">
+             {votesCount} of {totalMembers} votes (quorum {proposal.quorumPct}%)
          </div>
          {isActive && proposal.waitingVoters && proposal.waitingVoters.length > 0 && (
             <div className="pt-2 w-full">
