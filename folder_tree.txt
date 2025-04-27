@@ -9,13 +9,12 @@
 │   │   └── utils
 │   ├── folder_tree.txt
 │   ├── jest.config.js
-│   ├── node_modules
+│   ├── node_modules/
 │   ├── openapi.yaml
 │   ├── package-lock.json
 │   ├── package.json
 │   ├── prisma
 │   │   ├── dev.db
-│   │   ├── dev.db-journal
 │   │   ├── migrations
 │   │   └── schema.prisma
 │   ├── README.md
@@ -24,14 +23,14 @@
 │   │   ├── middleware
 │   │   ├── modules
 │   │   ├── server.ts
-│   │   └── types
+│   │   ├── types
+│   │   └── utils
 │   └── tsconfig.json
 ├── folder_tree.txt
 └── web
     ├── components.json
-    ├── folder_tree.txt
     ├── index.html
-    ├── node_modules
+    ├── node_modules/
     ├── package-lock.json
     ├── package.json
     ├── postcss.config.cjs
@@ -44,6 +43,7 @@
     │   ├── features
     │   ├── hooks
     │   ├── index.css
+    │   ├── layouts
     │   ├── lib
     │   ├── main.tsx
     │   ├── pages
@@ -56,4 +56,4 @@
     ├── tsconfig.node.json
     └── vite.config.ts
 
-782 directories, 29 files
+792 directories, 27 files

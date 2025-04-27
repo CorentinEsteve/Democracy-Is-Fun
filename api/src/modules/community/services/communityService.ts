@@ -170,6 +170,66 @@ export const findCommunityMembers = async (communityId: number): Promise<Members
     });
 };
 
+export const addMemberByIdentifier = async (communityId: number, userIdentifier: string, requestingUserId?: number): Promise<MembershipWithUser> => {
+    // 1. Find the user by identifier
+    let userToAdd: Pick<User, 'id'> | null = null;
+    const isEmail = userIdentifier.includes('@');
+    
+    if (isEmail) {
+        userToAdd = await prisma.user.findUnique({
+            where: { email: userIdentifier },
+            select: { id: true },
+        });
+    } else {
+        // Try finding by ID (assuming ID is numeric string)
+        const userIdNum = parseInt(userIdentifier, 10);
+        if (!isNaN(userIdNum)) {
+            userToAdd = await prisma.user.findUnique({
+                where: { id: userIdNum },
+                select: { id: true },
+            });
+        }
+    }
+
+    if (!userToAdd) {
+        throw new Error('User not found with the provided identifier.');
+    }
+
+    // 2. Check if trying to add self (if requestingUserId is provided)
+    if (requestingUserId && userToAdd.id === requestingUserId) {
+        throw new Error('Cannot add yourself as a member.');
+    }
+
+    // 3. Check if community exists
+    const communityExists = await prisma.community.findUnique({ where: { id: communityId } });
+    if (!communityExists) {
+        throw new Error('Community not found.');
+    }
+
+    // 4. Check if already a member
+    const existingMembership = await prisma.membership.findUnique({
+        where: { userId_communityId: { userId: userToAdd.id, communityId } },
+    });
+    if (existingMembership) {
+        throw new Error('User is already a member of this community.');
+    }
+
+    // 5. Create the membership
+    const newMembership = await prisma.membership.create({
+        data: {
+            userId: userToAdd.id,
+            communityId,
+            role: 'Member', // Default role
+            points: 0,      // Default points
+        },
+        include: { // Include user details in the response
+             user: { select: { id: true, name: true, avatarUrl: true } }
+        }
+    });
+
+    return newMembership;
+};
+
 export const addMemberToCommunity = async (communityId: number, userId: number): Promise<Membership> => {
     // Check if user exists (optional but good practice)
     const userExists = await prisma.user.findUnique({ where: { id: userId } });

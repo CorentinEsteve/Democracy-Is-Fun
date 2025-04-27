@@ -183,32 +183,44 @@ export const deleteCommunity = async (req: Request, res: Response): Promise<void
 
 export const addMember = async (req: Request, res: Response): Promise<void> => {
     const communityId = parseInt(req.params.communityId, 10);
-    const memberUserId = parseInt(req.body.userId, 10); // Get user ID from request body
+    // const memberUserId = parseInt(req.body.userId, 10); // Old way: Expecting numeric userId
+    const { userIdentifier } = req.body; // New way: Expecting string userIdentifier
     const requestingUserId = req.user?.userId;
 
     // Authorization already checked by authorizeAdmin middleware
     // Basic validation
-    if (isNaN(memberUserId)) {
-        res.status(400).json({ message: 'Invalid user ID in request body' });
+    if (!userIdentifier) { // Check if identifier is provided
+        res.status(400).json({ message: 'User identifier (ID or email) is required in request body' });
         return;
     }
-    if (memberUserId === requestingUserId) {
-        res.status(400).json({ message: 'Cannot add yourself as a member' });
-        return;
-    }
+    // if (isNaN(memberUserId)) { // Remove old check
+    //     res.status(400).json({ message: 'Invalid user ID in request body' });
+    //     return;
+    // }
+    
+    // We will need to find the user by identifier in the service layer.
+    // A check to prevent adding oneself might still be needed after finding the user ID.
+    // if (memberUserId === requestingUserId) {
+    //     res.status(400).json({ message: 'Cannot add yourself as a member' });
+    //     return;
+    // }
 
     try {
-        const newMembership = await communityService.addMemberToCommunity(communityId, memberUserId);
+        const newMembership = await communityService.addMemberByIdentifier(
+            communityId,
+            userIdentifier, 
+            requestingUserId // Pass requesting user ID for self-add check in service
+        );
         res.status(201).json(newMembership);
     } catch (error: any) {
-        // Only log unexpected errors
-        if (error.code === 'P2002') { // Prisma unique constraint violation (already a member)
-            res.status(409).json({ message: 'User is already a member of this community' });
-        } else if (error.message.includes('does not exist')) {
-             res.status(404).json({ message: error.message }); // User or Community not found
+        console.error('Error adding member:', error);
+        if (error.message.includes('User not found') || error.message.includes('Community not found')) {
+            res.status(404).json({ message: error.message });
+        } else if (error.message.includes('already a member')) {
+            res.status(409).json({ message: error.message }); // Conflict
+        } else if (error.message.includes('Cannot add yourself')) {
+            res.status(400).json({ message: error.message });
         } else {
-            // Log other errors
-            console.error('Error adding member:', error);
             res.status(500).json({ message: 'Internal server error adding member' });
         }
     }

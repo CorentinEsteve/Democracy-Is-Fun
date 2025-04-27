@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom';
 import { useProposals, useVoteOnProposal } from '@/features/proposals/api';
 import ProposalList from '@/features/proposals/components/ProposalList';
 import CreateProposalModal from '@/features/proposals/components/CreateProposalModal';
+import { ManageMembersModal } from '@/features/members/components/ManageMembersModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, PlusCircle } from 'lucide-react';
+import { Loader2, PlusCircle, Users } from 'lucide-react';
 // import ChatPanel from '@/features/chat/components/ChatPanel'; // Remove placeholder if it exists
 import MessageList from '@/features/chat/components/MessageList';
 import MessageInput from '@/features/chat/components/MessageInput';
@@ -68,11 +69,22 @@ const CommunityPage: React.FC = () => {
       <div className="md:col-span-2 h-full flex flex-col">
          <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-semibold">Proposals</h2>
-            <CreateProposalModal communityId={communityId}>
-                 <Button size="sm">
-                    <PlusCircle className="mr-2 h-4 w-4" /> New Proposal
-                 </Button>
-            </CreateProposalModal>
+            <div className="flex space-x-2">
+                <ManageMembersModal 
+                    communityId={communityId}
+                    trigger={
+                        <Button variant="outline" size="sm">
+                            <Users className="mr-2 h-4 w-4" /> Manage Members
+                        </Button>
+                    }
+                />
+                
+                <CreateProposalModal communityId={communityId}>
+                    <Button size="sm">
+                        <PlusCircle className="mr-2 h-4 w-4" /> New Proposal
+                    </Button>
+                </CreateProposalModal>
+            </div>
         </div>
         <div className="flex-grow overflow-hidden">
              {renderProposalsContent()}
