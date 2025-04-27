@@ -53,7 +53,7 @@ const createMockProposal = (overrides: Partial<Proposal> = {}): Proposal => {
 
 describe('ProposalCard', () => {
     const mockOnVote = vi.fn();
-    const currentUserId = 3; // Use a different user ID for some tests
+    const currentUserId = 3; // User 'Charlie'
 
     beforeEach(() => {
         mockOnVote.mockClear();
@@ -151,18 +151,7 @@ describe('ProposalCard', () => {
     });
 
     it('disables vote buttons if user has already voted', () => {
-        const proposal = createMockProposal({
-            votes: [
-                { id: 1, proposalId: 10, voterId: 1, voteType: 'For', voter: { id: 1, name: 'Alice' } },
-                { id: 2, proposalId: 10, voterId: currentUserId, voteType: 'Against', voter: { id: currentUserId, name: 'Bob' } },
-            ],
-            waitingVoters: [{ id: 3, name: 'Charlie' }]
-        });
-        render(<ProposalCard proposal={proposal} onVote={mockOnVote} currentUserId={currentUserId} />, { wrapper });
-        
-        expect(getVoteButton('For')).toBeDisabled();
-        expect(getVoteButton('Against')).toBeDisabled();
-        expect(getVoteButton('Neutral')).toBeDisabled();
+        // THIS TEST IS NO LONGER VALID - REMOVING
     });
 
     it('disables vote buttons if deadline has passed', () => {
@@ -225,10 +214,62 @@ describe('ProposalCard', () => {
          const proposal = createMockProposal(); // Default waiting list has only Charlie
          render(<ProposalCard proposal={proposal} onVote={mockOnVote} currentUserId={currentUserId} />, { wrapper });
 
-         expect(screen.getByText('Waiting for:')).toBeInTheDocument();
-         // Check only for Charlie's initial ('C') as per default mock data
-         expect(screen.queryByText('A')).not.toBeInTheDocument(); // Initiator shouldn't be in waiting list display
-         expect(screen.queryByText('B')).not.toBeInTheDocument(); // Bob voted, not waiting
-         expect(screen.getByText('C')).toBeInTheDocument(); // Charlie is waiting
+         const waitingListSection = screen.getByText('Waiting for:').closest('div');
+         expect(waitingListSection).toBeInTheDocument();
+
+         // Check only for Charlie's initial ('C') within the waiting list section
+         // Initiator 'A' and voted 'B' should not be found *within this section*
+         expect(within(waitingListSection!).queryByText('A')).not.toBeInTheDocument(); 
+         expect(within(waitingListSection!).queryByText('B')).not.toBeInTheDocument(); 
+         expect(within(waitingListSection!).getByText('C')).toBeInTheDocument(); 
      });
+
+    it('allows user to change their vote', () => {
+        const proposal = createMockProposal({
+            votes: [
+                { id: 1, proposalId: 10, voterId: 1, voteType: 'For', voter: { id: 1, name: 'Alice' } },
+                // Current user (3) initially voted 'For'
+                { id: 3, proposalId: 10, voterId: currentUserId, voteType: 'For', voter: { id: currentUserId, name: 'Charlie' } }, 
+            ],
+            waitingVoters: [{ id: 2, name: 'Bob' }] // Bob hasn't voted
+        });
+        
+        // Use rerender from the initial render call
+        const { rerender } = render(<ProposalCard proposal={proposal} onVote={mockOnVote} currentUserId={currentUserId} />, { wrapper });
+
+        // Check initial state: 'For' button is selected (default variant)
+        const forButton = getVoteButton('For');
+        const againstButton = getVoteButton('Against');
+        expect(forButton).toHaveClass(/bg-primary|border-primary/); // Check for default/selected style
+        expect(againstButton).not.toHaveClass(/bg-destructive/); // Check against button is outline
+        expect(forButton).not.toBeDisabled(); // Buttons should NOT be disabled
+        expect(againstButton).not.toBeDisabled();
+
+        // Click the 'Against' button
+        fireEvent.click(againstButton);
+
+        // Assert onVote was called with the new vote type
+        expect(mockOnVote).toHaveBeenCalledTimes(1);
+        expect(mockOnVote).toHaveBeenCalledWith(proposal.id, 'Against');
+
+        // Create updated proposal data
+        const updatedProposal = createMockProposal({
+            ...proposal,
+            votes: [
+                { id: 1, proposalId: 10, voterId: 1, voteType: 'For', voter: { id: 1, name: 'Alice' } },
+                // User 3 vote is now 'Against'
+                { id: 3, proposalId: 10, voterId: currentUserId, voteType: 'Against', voter: { id: currentUserId, name: 'Charlie' } }, 
+            ],
+        });
+
+        // Use rerender to update the component with new props
+        rerender(<ProposalCard proposal={updatedProposal} onVote={mockOnVote} currentUserId={currentUserId} />); 
+
+        // Check updated state: 'Against' button is selected (destructive variant)
+        // Now getVoteButton will only search within the single, updated component instance
+        const updatedForButton = getVoteButton('For');
+        const updatedAgainstButton = getVoteButton('Against');
+        expect(updatedForButton).not.toHaveClass(/bg-primary|border-primary/);
+        expect(updatedAgainstButton).toHaveClass(/bg-destructive|border-destructive/); 
+    });
 }); 

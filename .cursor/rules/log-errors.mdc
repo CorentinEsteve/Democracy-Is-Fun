@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+When: After any code generation/update
+Action: 
+Search conversation for error messages.
+For each, append Markdown to cursor-errors.md:
+    - **Error**: <exact error text>
+    - **Context**: <relevant prompt snippet or filename>
+    - **Fix**: <how the error was resolved>

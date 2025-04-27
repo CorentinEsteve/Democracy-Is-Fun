@@ -38,7 +38,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onVote, currentUs
   const getVoteCount = (type: VoteType) => proposal.votes.filter(v => v.voteType === type).length;
 
   const handleVote = (voteType: VoteType) => {
-    if (!currentUserId || !isActive || hasVoted) return;
+    if (!currentUserId || !isActive) return;
     onVote(proposal.id, voteType);
   };
 
@@ -95,7 +95,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onVote, currentUs
                     variant={userVote?.voteType === 'For' ? 'default' : 'outline'} 
                     size="sm" 
                     onClick={() => handleVote('For')} 
-                    disabled={!isActive || hasVoted || !currentUserId}
+                    disabled={!isActive || !currentUserId}
                     className="px-2 py-1 h-auto"
                     aria-label={`Vote For (${voteCountFor} votes)`}
                 >
@@ -105,7 +105,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onVote, currentUs
                     variant={userVote?.voteType === 'Against' ? 'destructive' : 'outline'} 
                     size="sm" 
                     onClick={() => handleVote('Against')} 
-                    disabled={!isActive || hasVoted || !currentUserId}
+                    disabled={!isActive || !currentUserId}
                     className="px-2 py-1 h-auto"
                     aria-label={`Vote Against (${voteCountAgainst} votes)`}
                 >
@@ -115,7 +115,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onVote, currentUs
                     variant={userVote?.voteType === 'Neutral' ? 'secondary' : 'outline'} 
                     size="sm" 
                     onClick={() => handleVote('Neutral')} 
-                    disabled={!isActive || hasVoted || !currentUserId}
+                    disabled={!isActive || !currentUserId}
                     className="px-2 py-1 h-auto"
                     aria-label={`Vote Neutral (${voteCountNeutral} votes)`}
                 >
