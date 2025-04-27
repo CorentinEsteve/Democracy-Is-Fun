@@ -63,10 +63,10 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ communit
   return (
     <Dialog open={isOpen} onOpenChange={handleModalOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-[625px]">
+      <DialogContent className="sm:max-w-[625px] bg-white text-zinc-950 dark:bg-white dark:text-zinc-950">
         <DialogHeader>
           <DialogTitle>Manage Members</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-muted-foreground dark:text-zinc-500">
             Add or remove members from this community.
           </DialogDescription>
         </DialogHeader>

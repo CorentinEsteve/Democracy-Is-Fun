@@ -59,10 +59,10 @@ const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({ children })
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] bg-white text-zinc-950 dark:bg-white dark:text-zinc-950">
         <DialogHeader>
           <DialogTitle>Create New Community</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-muted-foreground dark:text-zinc-500">
             Fill in the details for your new community. Click save when you're done.
           </DialogDescription>
         </DialogHeader>

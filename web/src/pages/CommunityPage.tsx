@@ -55,7 +55,7 @@ const CommunityPage: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 h-[calc(100vh-theme_header_height)]"> {/* Adjust height based on layout */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-[calc(100vh-theme_header_height)]"> {/* Adjust height based on layout */}
       {/* Left Column: Chat Panel */}
       <div className="md:col-span-1 h-full flex flex-col bg-card rounded-lg shadow border p-4">
         <h2 className="text-xl font-semibold mb-4 border-b pb-2">Community Chat</h2>

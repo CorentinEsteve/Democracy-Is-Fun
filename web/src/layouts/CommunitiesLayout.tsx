@@ -29,17 +29,22 @@ const CommunitiesLayout: React.FC = () => {
   return (
     // No outer flex flex-col needed as ProtectedRoute doesn't provide a layout shell
     <div className="flex h-screen bg-background">
-        {/* Sidebar from original CommunitiesPage */}
+        {/* Sidebar */}
         <aside className="w-64 border-r p-4 flex flex-col flex-shrink-0">
-            <div className="flex items-center justify-between mb-4">
-                <h1 className="text-xl font-semibold">Communities</h1>
+            {/* Header Row - Adjusted after user flex-col change */}
+            <div className="flex items-baseline flex-col mb-4"> 
+                {/* Title */}
+                <h1 className="text-xl font-bold"> 
+                    Communities
+                </h1>
+                {/* User Greeting */}
                 {user && (
-                    <div className="flex items-center space-x-2">
-                        <span className="text-sm text-muted-foreground">Hi, {user.name}</span>
-                        <Button onClick={logout} variant="ghost" size="sm">Logout</Button>
-                    </div>
+                    <span className="text-xs text-muted-foreground mt-1">Hi, {user.name}</span>
+                     /* Removed the wrapping div and logout button from here */
                 )}
             </div>
+            
+            {/* Search and Add Row */}
             <div className="flex items-center mb-4 space-x-2">
                 <Input
                     type="search"
@@ -55,8 +60,8 @@ const CommunitiesLayout: React.FC = () => {
                 </CreateCommunityModal>
             </div>
 
-            {/* Loading/Error/List Area */}
-            <div className="flex-grow overflow-y-auto">
+            {/* Loading/Error/List Area - Takes up available space */}
+            <div className="flex-grow overflow-y-auto mb-4"> {/* Added mb-4 */} 
                 {isLoading && (
                     <div className="flex items-center justify-center h-full" role="status" aria-label="Loading communities">
                         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -70,12 +75,16 @@ const CommunitiesLayout: React.FC = () => {
                 {!isLoading && !error && (
                     <CommunityList
                         communities={filteredCommunities}
-                        // Pass necessary props if CommunityList expects them, e.g., onSelect
-                        // selectedCommunityId={null} // Selection state likely handled by URL/useParams now
-                        // onSelect={handleSelectCommunity} // Navigation handled by Links inside?
                     />
                 )}
             </div>
+
+            {/* Logout Button - Pushed to bottom */}
+            {user && (
+                <Button onClick={logout} variant="outline" size="sm" className="mt-auto"> {/* mt-auto might not be needed due to flex-grow above, but safe */}
+                    Logout
+                </Button>
+            )}
         </aside>
 
         {/* Main content area */}

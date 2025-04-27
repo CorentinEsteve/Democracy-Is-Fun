@@ -107,10 +107,10 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ communityId, 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[525px]">
+      <DialogContent className="sm:max-w-[625px] bg-white text-zinc-950 dark:bg-white dark:text-zinc-950">
         <DialogHeader>
           <DialogTitle>Create New Proposal</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-muted-foreground dark:text-zinc-500">
             Fill in the details for your new proposal. Click submit when done.
           </DialogDescription>
         </DialogHeader>
