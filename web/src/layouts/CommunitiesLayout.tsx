@@ -88,7 +88,7 @@ const CommunitiesLayout: React.FC = () => {
         </aside>
 
         {/* Main content area */}
-        <main className="flex-1 overflow-y-auto p-6 bg-muted/40">
+        <main className="flex-1 overflow-y-auto p-6" style={{ backgroundColor: '#f5f7fa' }}>
           <Outlet /> {/* Renders SelectCommunityPlaceholder or CommunityPage */}
         </main>
     </div>
