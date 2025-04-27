@@ -81,11 +81,16 @@ describe('CreateProposalModal', () => {
     await user.click(submitButton); 
 
     expect(mockMutateAsync).not.toHaveBeenCalled();
-    expect(await screen.findByText(/title is required/i)).toBeInTheDocument();
+    // Wait specifically for the error message associated with the title input
+    const titleError = await screen.findByText(/title is required/i);
+    expect(titleError).toBeInTheDocument();
+    // Optionally, check it's near the title input if necessary
+    // const titleInput = screen.getByLabelText(/title/i);
+    // expect(titleInput.closest('div')).toContainElement(titleError);
   });
 
   it('calls createProposal mutation with correct data on submit', async () => {
-    mockMutateAsync.mockResolvedValueOnce({}); // Simulate success
+    mockMutateAsync.mockResolvedValueOnce({}); 
     const { user } = renderCreateModal(communityId);
     await user.click(screen.getByRole('button', { name: /new proposal/i }));
 
@@ -94,29 +99,45 @@ describe('CreateProposalModal', () => {
     const locInput = screen.getByLabelText(/location/i);
     const tagsInput = screen.getByLabelText(/tags/i);
     const quorumInput = screen.getByLabelText(/quorum/i);
-    // Date/Deadline inputs are harder to test precisely without more complex setup
+    // Select the datetime-local inputs by label
+    const dateTimeInput = screen.getByLabelText(/date & time/i); 
+    const deadlineInput = screen.getByLabelText(/deadline/i);
     
+    // Store input values
+    const dateTimeValue = '2025-05-01T14:30';
+    const deadlineValue = '2025-05-10T23:59';
+
     await user.type(titleInput, 'My Test Proposal');
     await user.type(descInput, 'Detailed description');
     await user.type(locInput, 'Meeting Room 1');
-    await user.type(tagsInput, 'urgent, meeting '); // Test trimming and filtering
+    await user.type(tagsInput, 'urgent, meeting ');
     await user.clear(quorumInput);
     await user.type(quorumInput, '75');
+    
+    // Fill inputs using variables
+    await fireEvent.change(dateTimeInput, { target: { value: dateTimeValue } });
+    await fireEvent.change(deadlineInput, { target: { value: deadlineValue } });
 
     const submitButton = screen.getByRole('button', { name: /submit proposal/i });
     await user.click(submitButton);
 
     await waitFor(() => {
       expect(mockMutateAsync).toHaveBeenCalledTimes(1);
-      expect(mockMutateAsync).toHaveBeenCalledWith({
+      
+      // Dynamically generate expected ISO strings based on input values
+      const expectedDateTimeISO = new Date(dateTimeValue).toISOString();
+      const expectedDeadlineISO = new Date(deadlineValue).toISOString();
+
+      expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
         communityId: communityId,
         title: 'My Test Proposal',
         description: 'Detailed description',
         location: 'Meeting Room 1',
         tags: ['urgent', 'meeting'],
         quorumPct: 75,
-        // dateTime and deadline would be undefined here
-      });
+        dateTime: expectedDateTimeISO, 
+        deadline: expectedDeadlineISO,
+      }));
     });
 
     // Check if modal closes and toast is called
