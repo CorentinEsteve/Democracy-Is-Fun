@@ -1,30 +1,25 @@
-// Define role enum locally for frontend use
+// Role enum - mirrors backend logic/expectations even if DB stores string
 export enum MembershipRole {
     Admin = 'Admin',
     Member = 'Member',
 }
 
-// Define User details needed within MembershipWithUser
-// (Assuming a global User type isn't readily available/imported here)
-interface UserSubset {
-  id: number;
-  name: string;
-  avatarUrl?: string | null;
+// Base User information often included with Membership
+interface BasicUser {
+    id: number; // Assuming number based on schema
+    name: string;
+    avatarUrl?: string | null; 
 }
 
-// Define type directly matching the API response structure
-export type MembershipWithUser = {
-   // Fields directly from the Membership model
-   userId: number;
-   communityId: number;
-   role: MembershipRole;
-   points: number;
-   joinedAt: string; // Or Date, depending on API serialization
-   membershipId: number; // Assuming Prisma adds this based on @@id([userId, communityId]) or a separate ID
-
-   // Nested user object
-   user: UserSubset;
-};
+// Combines Membership data with basic User details
+export interface MembershipWithUser {
+    userId: number;
+    communityId: number;
+    role: MembershipRole; // Use the enum
+    points: number;
+    joinedAt: string; // ISO Date string
+    user: BasicUser;
+}
 
 // Type for adding a member payload
 export interface AddMemberPayload {

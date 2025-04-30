@@ -63,7 +63,7 @@ const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({ children })
         <DialogHeader>
           <DialogTitle>Create New Community</DialogTitle>
           <DialogDescription className="text-muted-foreground dark:text-zinc-500">
-            Fill in the details for your new community. Click save when you're done.
+            Fill in the details for your new community.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>

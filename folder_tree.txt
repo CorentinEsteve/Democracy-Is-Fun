@@ -9,7 +9,7 @@
 │   │   └── utils
 │   ├── folder_tree.txt
 │   ├── jest.config.js
-│   ├── node_modules/
+│   ├── node_modules
 │   ├── openapi.yaml
 │   ├── package-lock.json
 │   ├── package.json
@@ -26,11 +26,12 @@
 │   │   ├── types
 │   │   └── utils
 │   └── tsconfig.json
+├── cursor-errors.md
 ├── folder_tree.txt
 └── web
     ├── components.json
     ├── index.html
-    ├── node_modules/
+    ├── node_modules
     ├── package-lock.json
     ├── package.json
     ├── postcss.config.cjs
@@ -56,4 +57,4 @@
     ├── tsconfig.node.json
     └── vite.config.ts
 
-792 directories, 27 files
+792 directories, 28 files
