@@ -16,7 +16,7 @@ const ProposalList: React.FC<ProposalListProps> = ({ proposals, onVote, currentU
 
   return (
     <ScrollArea className="h-[calc(100vh-100px)]"> {/* Adjust height as needed */} 
-      <div className="space-y-4">
+      <div className="space-y-4 p-1">
         {proposals.map((proposal) => (
           <ProposalCard 
             key={proposal.id} 
