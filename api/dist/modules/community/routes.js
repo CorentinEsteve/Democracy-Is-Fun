@@ -49,5 +49,6 @@ router.delete('/:communityId', authenticate_1.authenticate, authorizeAdmin_1.aut
 router.get('/:communityId/members', authenticate_1.authenticate, communityController.listMembers);
 router.post('/:communityId/members', authenticate_1.authenticate, authorizeAdmin_1.authorizeAdmin, communityController.addMember);
 router.delete('/:communityId/members/:userId', authenticate_1.authenticate, authorizeAdmin_1.authorizeAdmin, communityController.removeMember);
+router.patch('/:communityId/members/:userId', authenticate_1.authenticate, authorizeAdmin_1.authorizeAdmin, communityController.updateMemberRole);
 exports.default = router;
 //# sourceMappingURL=routes.js.map

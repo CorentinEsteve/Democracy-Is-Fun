@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.removeMemberFromCommunity = exports.addMemberToCommunity = exports.findCommunityMembers = exports.deleteCommunityAndMemberships = exports.updateCommunityDetails = exports.isUserAdmin = exports.isUserMember = exports.findCommunityById = exports.findCommunitiesByUserId = exports.createCommunityWithAdmin = void 0;
+exports.updateMemberRoleInCommunity = exports.removeMemberFromCommunity = exports.addMemberToCommunity = exports.addMemberByIdentifier = exports.findCommunityMembers = exports.deleteCommunityAndMemberships = exports.updateCommunityDetails = exports.isUserAdmin = exports.isUserMember = exports.findCommunityById = exports.findCommunitiesByUserId = exports.createCommunityWithAdmin = void 0;
 const server_1 = require("../../../server"); // Adjust path if necessary
 const createCommunityWithAdmin = async (data, creatorId) => {
     return server_1.prisma.$transaction(async (tx) => {
@@ -132,6 +132,60 @@ const findCommunityMembers = async (communityId) => {
     });
 };
 exports.findCommunityMembers = findCommunityMembers;
+const addMemberByIdentifier = async (communityId, userIdentifier, requestingUserId) => {
+    // 1. Find the user by identifier
+    let userToAdd = null;
+    const isEmail = userIdentifier.includes('@');
+    if (isEmail) {
+        userToAdd = await server_1.prisma.user.findUnique({
+            where: { email: userIdentifier },
+            select: { id: true },
+        });
+    }
+    else {
+        // Try finding by ID (assuming ID is numeric string)
+        const userIdNum = parseInt(userIdentifier, 10);
+        if (!isNaN(userIdNum)) {
+            userToAdd = await server_1.prisma.user.findUnique({
+                where: { id: userIdNum },
+                select: { id: true },
+            });
+        }
+    }
+    if (!userToAdd) {
+        throw new Error('User not found with the provided identifier.');
+    }
+    // 2. Check if trying to add self (if requestingUserId is provided)
+    if (requestingUserId && userToAdd.id === requestingUserId) {
+        throw new Error('Cannot add yourself as a member.');
+    }
+    // 3. Check if community exists
+    const communityExists = await server_1.prisma.community.findUnique({ where: { id: communityId } });
+    if (!communityExists) {
+        throw new Error('Community not found.');
+    }
+    // 4. Check if already a member
+    const existingMembership = await server_1.prisma.membership.findUnique({
+        where: { userId_communityId: { userId: userToAdd.id, communityId } },
+    });
+    if (existingMembership) {
+        throw new Error('User is already a member of this community.');
+    }
+    // 5. Create the membership
+    const newMembership = await server_1.prisma.membership.create({
+        data: {
+            userId: userToAdd.id,
+            communityId,
+            role: 'Member', // Default role
+            points: 0, // Default points
+        },
+        include: {
+            user: { select: { id: true, name: true, avatarUrl: true } }
+        }
+    });
+    return newMembership;
+};
+exports.addMemberByIdentifier = addMemberByIdentifier;
 const addMemberToCommunity = async (communityId, userId) => {
     // Check if user exists (optional but good practice)
     const userExists = await server_1.prisma.user.findUnique({ where: { id: userId } });
@@ -168,4 +222,50 @@ const removeMemberFromCommunity = async (communityId, userId) => {
     });
 };
 exports.removeMemberFromCommunity = removeMemberFromCommunity;
+// New service function to update member role
+const updateMemberRoleInCommunity = async (communityId, userId, newRole // Accept role as string
+) => {
+    // Optional: Add validation within the service too if needed
+    // if (newRole !== 'Admin' && newRole !== 'Member') {
+    //     throw new Error('Invalid role specified.');
+    // }
+    // Retrieve community to check creator ID
+    const community = await server_1.prisma.community.findUnique({
+        where: { id: communityId },
+        select: { creatorId: true }
+    });
+    if (!community) {
+        // Prisma's update below would throw P2025, but this gives a clearer message earlier
+        throw new Error('Community not found.');
+    }
+    // Prevent changing the role of the community creator
+    if (userId === community.creatorId && newRole !== 'Admin') {
+        throw new Error('Cannot change the role of the community creator.');
+    }
+    // Additional check: Prevent last admin from demoting themselves? (Complex - requires checking other admins)
+    // This logic is omitted for simplicity but might be needed in a real app.
+    try {
+        const updatedMembership = await server_1.prisma.membership.update({
+            where: {
+                userId_communityId: { userId, communityId }
+            },
+            data: {
+                role: newRole // Update with the string value
+            },
+            include: {
+                user: { select: { id: true, name: true, avatarUrl: true } }
+            }
+        });
+        return updatedMembership;
+    }
+    catch (error) {
+        if (error.code === 'P2025') {
+            // Throw a more specific error if the membership itself wasn't found
+            throw new Error('Membership not found for this user/community.');
+        }
+        // Re-throw other unexpected errors
+        throw error;
+    }
+};
+exports.updateMemberRoleInCommunity = updateMemberRoleInCommunity;
 //# sourceMappingURL=communityService.js.map

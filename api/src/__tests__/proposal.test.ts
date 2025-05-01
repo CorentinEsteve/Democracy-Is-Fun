@@ -56,12 +56,21 @@ describe('Proposal API', () => {
   let token1: string, token2: string, token3: string;
   let community1: Community;
 
-  beforeAll(async () => {
+  // Cleanup hook order: Delete dependent records first
+  const cleanupDatabase = async () => {
     await prisma.vote.deleteMany({});
+    await prisma.opposition.deleteMany({}); // Delete oppositions (if any)
+    await prisma.event.deleteMany({});      // Delete events (if any)
     await prisma.proposal.deleteMany({});
     await prisma.membership.deleteMany({});
+    await prisma.note.deleteMany({});       // Delete notes (if any)
+    await prisma.message.deleteMany({});    // Delete messages (if any)
     await prisma.community.deleteMany({});
     await prisma.user.deleteMany({});
+  };
+
+  beforeAll(async () => {
+    await cleanupDatabase(); // Initial cleanup
 
     const u1 = await createUserAndGetToken('user1@proposal.test', 'Prop User 1');
     user1 = u1.user; token1 = u1.token;
@@ -81,17 +90,15 @@ describe('Proposal API', () => {
   });
 
   afterAll(async () => {
-    await prisma.vote.deleteMany({});
-    await prisma.proposal.deleteMany({});
-    await prisma.membership.deleteMany({});
-    await prisma.community.deleteMany({});
-    await prisma.user.deleteMany({});
+    await cleanupDatabase(); // Final cleanup
     await prisma.$disconnect();
   });
 
   beforeEach(async () => {
-     // Clean proposals/votes before each test
+     // Clean only proposals/votes/events/oppositions before each test
      await prisma.vote.deleteMany({});
+     await prisma.opposition.deleteMany({}); 
+     await prisma.event.deleteMany({});      
      await prisma.proposal.deleteMany({});
   })
 

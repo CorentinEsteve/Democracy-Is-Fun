@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listMembers = exports.removeMember = exports.addMember = exports.deleteCommunity = exports.updateCommunity = exports.getCommunity = exports.listCommunities = exports.createCommunity = void 0;
+exports.listMembers = exports.updateMemberRole = exports.removeMember = exports.addMember = exports.deleteCommunity = exports.updateCommunity = exports.getCommunity = exports.listCommunities = exports.createCommunity = void 0;
 const communityService = __importStar(require("../services/communityService"));
 const createCommunity = async (req, res) => {
     const { name, description, imageUrl } = req.body;
@@ -204,33 +204,42 @@ exports.deleteCommunity = deleteCommunity;
 // --- Membership Controllers ---
 const addMember = async (req, res) => {
     const communityId = parseInt(req.params.communityId, 10);
-    const memberUserId = parseInt(req.body.userId, 10); // Get user ID from request body
+    // const memberUserId = parseInt(req.body.userId, 10); // Old way: Expecting numeric userId
+    const { userIdentifier } = req.body; // New way: Expecting string userIdentifier
     const requestingUserId = req.user?.userId;
     // Authorization already checked by authorizeAdmin middleware
     // Basic validation
-    if (isNaN(memberUserId)) {
-        res.status(400).json({ message: 'Invalid user ID in request body' });
+    if (!userIdentifier) { // Check if identifier is provided
+        res.status(400).json({ message: 'User identifier (ID or email) is required in request body' });
         return;
     }
-    if (memberUserId === requestingUserId) {
-        res.status(400).json({ message: 'Cannot add yourself as a member' });
-        return;
-    }
+    // if (isNaN(memberUserId)) { // Remove old check
+    //     res.status(400).json({ message: 'Invalid user ID in request body' });
+    //     return;
+    // }
+    // We will need to find the user by identifier in the service layer.
+    // A check to prevent adding oneself might still be needed after finding the user ID.
+    // if (memberUserId === requestingUserId) {
+    //     res.status(400).json({ message: 'Cannot add yourself as a member' });
+    //     return;
+    // }
     try {
-        const newMembership = await communityService.addMemberToCommunity(communityId, memberUserId);
+        const newMembership = await communityService.addMemberByIdentifier(communityId, userIdentifier, requestingUserId // Pass requesting user ID for self-add check in service
+        );
         res.status(201).json(newMembership);
     }
     catch (error) {
-        // Only log unexpected errors
-        if (error.code === 'P2002') { // Prisma unique constraint violation (already a member)
-            res.status(409).json({ message: 'User is already a member of this community' });
+        console.error('Error adding member:', error);
+        if (error.message.includes('User not found') || error.message.includes('Community not found')) {
+            res.status(404).json({ message: error.message });
         }
-        else if (error.message.includes('does not exist')) {
-            res.status(404).json({ message: error.message }); // User or Community not found
+        else if (error.message.includes('already a member')) {
+            res.status(409).json({ message: error.message }); // Conflict
+        }
+        else if (error.message.includes('Cannot add yourself')) {
+            res.status(400).json({ message: error.message });
         }
         else {
-            // Log other errors
-            console.error('Error adding member:', error);
             res.status(500).json({ message: 'Internal server error adding member' });
         }
     }
@@ -265,6 +274,40 @@ const removeMember = async (req, res) => {
     }
 };
 exports.removeMember = removeMember;
+// New controller for updating member role
+const updateMemberRole = async (req, res) => {
+    const communityId = parseInt(req.params.communityId, 10);
+    const memberUserIdToUpdate = parseInt(req.params.userId, 10);
+    const { role: newRole } = req.body; // Expect role as string ('Admin' or 'Member')
+    // Authorization already checked by authorizeAdmin middleware
+    // Basic validation
+    if (isNaN(memberUserIdToUpdate)) {
+        res.status(400).json({ message: 'Invalid user ID in route parameter' });
+        return;
+    }
+    if (typeof newRole !== 'string' || (newRole !== 'Admin' && newRole !== 'Member')) {
+        res.status(400).json({ message: 'Invalid role specified in request body. Must be "Admin" or "Member".' });
+        return;
+    }
+    try {
+        const updatedMembership = await communityService.updateMemberRoleInCommunity(communityId, memberUserIdToUpdate, newRole // Pass the validated string role
+        );
+        res.status(200).json(updatedMembership);
+    }
+    catch (error) {
+        console.error('Error updating member role:', error);
+        if (error.message.includes('not found')) {
+            res.status(404).json({ message: error.message });
+        }
+        else if (error.message.includes('Cannot change the role')) {
+            res.status(400).json({ message: error.message });
+        }
+        else {
+            res.status(500).json({ message: 'Internal server error updating member role' });
+        }
+    }
+};
+exports.updateMemberRole = updateMemberRole;
 const listMembers = async (req, res) => {
     const communityId = parseInt(req.params.communityId, 10);
     const userId = req.user?.userId; // From authenticate middleware

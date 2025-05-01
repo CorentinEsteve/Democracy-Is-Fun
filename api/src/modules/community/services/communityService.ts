@@ -1,4 +1,4 @@
-import { Prisma, Community, Membership, User, MembershipRole } from '@prisma/client';
+import { Prisma, Community, Membership, User } from '@prisma/client';
 import { prisma } from '../../../server'; // Adjust path if necessary
 
 type CommunityWithMembers = Community & {
@@ -272,24 +272,52 @@ export const removeMemberFromCommunity = async (communityId: number, userId: num
 export const updateMemberRoleInCommunity = async (
     communityId: number, 
     userId: number, 
-    newRole: MembershipRole // Use enum type if defined, otherwise string
+    newRole: string // Accept role as string
 ): Promise<MembershipWithUser> => {
-     // Check if user is the creator (cannot change creator's role)
-    const community = await prisma.community.findUnique({ where: { id: communityId } });
-    if (community?.creatorId === userId) {
-        throw new Error('Cannot change the community creator\'s role.');
+
+    // Optional: Add validation within the service too if needed
+    // if (newRole !== 'Admin' && newRole !== 'Member') {
+    //     throw new Error('Invalid role specified.');
+    // }
+
+    // Retrieve community to check creator ID
+    const community = await prisma.community.findUnique({
+        where: { id: communityId },
+        select: { creatorId: true }
+    });
+
+    if (!community) {
+        // Prisma's update below would throw P2025, but this gives a clearer message earlier
+        throw new Error('Community not found.'); 
     }
 
-    // Update the membership role (will throw P2025 if not found)
-    return prisma.membership.update({
-        where: {
-            userId_communityId: { userId, communityId },
-        },
-        data: {
-            role: newRole,
-        },
-         include: { // Include user details in the response
-             user: { select: { id: true, name: true, avatarUrl: true } }
+    // Prevent changing the role of the community creator
+    if (userId === community.creatorId && newRole !== 'Admin') {
+         throw new Error('Cannot change the role of the community creator.');
+    }
+
+    // Additional check: Prevent last admin from demoting themselves? (Complex - requires checking other admins)
+    // This logic is omitted for simplicity but might be needed in a real app.
+
+    try {
+        const updatedMembership = await prisma.membership.update({
+            where: {
+                userId_communityId: { userId, communityId }
+            },
+            data: {
+                role: newRole // Update with the string value
+            },
+            include: { // Include user details in the response
+                user: { select: { id: true, name: true, avatarUrl: true } }
+            }
+        });
+         return updatedMembership;
+    } catch (error: any) {
+         if (error.code === 'P2025') {
+            // Throw a more specific error if the membership itself wasn't found
+            throw new Error('Membership not found for this user/community.');
         }
-    });
+        // Re-throw other unexpected errors
+        throw error; 
+    }
 }; 

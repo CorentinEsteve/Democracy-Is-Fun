@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import * as communityService from '../services/communityService';
-import { MembershipRole } from '@prisma/client'; // Import enum if defined
 
 export const createCommunity = async (req: Request, res: Response): Promise<void> => {
   const { name, description, imageUrl } = req.body;
@@ -259,46 +258,33 @@ export const removeMember = async (req: Request, res: Response): Promise<void> =
 export const updateMemberRole = async (req: Request, res: Response): Promise<void> => {
     const communityId = parseInt(req.params.communityId, 10);
     const memberUserIdToUpdate = parseInt(req.params.userId, 10);
-    // Get the role as a potential string first
-    const { role: newRoleString } = req.body as { role: string }; 
-    const requestingUserId = req.user?.userId;
+    const { role: newRole } = req.body; // Expect role as string ('Admin' or 'Member')
 
     // Authorization already checked by authorizeAdmin middleware
-    
     // Basic validation
     if (isNaN(memberUserIdToUpdate)) {
         res.status(400).json({ message: 'Invalid user ID in route parameter' });
         return;
     }
-    // Validate the incoming string directly
-    if (!newRoleString || (newRoleString !== 'Admin' && newRoleString !== 'Member')) { 
-         res.status(400).json({ message: 'Invalid role provided in request body. Must be \'Admin\' or \'Member\'.' });
-        return;
-    }
-
-    // Now cast to the enum type *after* validation for the service call
-    const newRole = newRoleString as MembershipRole;
-
-    if (memberUserIdToUpdate === requestingUserId) {
-        res.status(400).json({ message: 'Admins cannot change their own role.' });
+    if (typeof newRole !== 'string' || (newRole !== 'Admin' && newRole !== 'Member')) {
+        res.status(400).json({ message: 'Invalid role specified in request body. Must be "Admin" or "Member".' });
         return;
     }
 
     try {
-        // Pass the correctly typed enum value to the service
         const updatedMembership = await communityService.updateMemberRoleInCommunity(
             communityId,
             memberUserIdToUpdate,
-            newRole
+            newRole // Pass the validated string role
         );
         res.status(200).json(updatedMembership);
     } catch (error: any) {
         console.error('Error updating member role:', error);
-        if (error.code === 'P2025') { // Prisma record not found
-             res.status(404).json({ message: 'Membership not found for this user/community' });
-         } else if (error.message.includes('Cannot change the community creator')) {
-             res.status(400).json({ message: error.message });
-         } else {
+         if (error.message.includes('not found')) {
+            res.status(404).json({ message: error.message });
+        } else if (error.message.includes('Cannot change the role')) {
+            res.status(400).json({ message: error.message });
+        } else {
             res.status(500).json({ message: 'Internal server error updating member role' });
         }
     }

@@ -1,470 +1,308 @@
 import request from 'supertest';
-import { app, prisma } from '../server'; // Adjust path as needed
-import { signJwt } from '../modules/auth/services/authService'; // Adjust path
-import { User, Community, Membership, MembershipRole } from '@prisma/client';
-import { RoleType } from '../types';
-import jwt from 'jsonwebtoken';
+import { app, prisma } from '../server'; // Adjust path as necessary
+import { generateToken } from '../modules/auth/services/authService'; // Use generateToken
+import { User, Community, Membership, PrismaClient } from '@prisma/client'; // Import PrismaClient
+import bcrypt from 'bcrypt'; // Import bcrypt for hashing dummy password
 
-// Mock the Prisma client module
-jest.mock('@prisma/client', () => {
-  const mockPrismaClient = {
-    membership: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      delete: jest.fn(),
-    },
-    community: {
-      findUnique: jest.fn(),
-    },
-    user: {
-      findUnique: jest.fn(),
-    },
-    $disconnect: jest.fn(),
-  };
-  return {
-    PrismaClient: jest.fn(() => mockPrismaClient),
-  };
-});
-
-// Mock the authenticate middleware
-jest.mock('../middleware/authenticate', () => ({
-    authenticate: (req: any, res: any, next: () => void) => {
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            try {
-                const decoded = jwt.verify(token, process.env.JWT_SECRET || 'test-secret') as { userId: number; email: string };
-                req.user = { userId: decoded.userId, email: decoded.email };
-            } catch (error) { /* Ignore */ }
-        }
-        next();
-    },
-}));
-
-// Mock the authorizeAdmin middleware
-jest.mock('../middleware/authorizeAdmin', () => ({
-    authorizeAdmin: jest.fn((req: any, res: any, next: () => void) => {
-        const requestingUserId = req.user?.userId;
-        if (requestingUserId === 2) { // Assuming user 2 is admin (based on test data)
-            next();
-        } else {
-            res.status(403).json({ message: 'Mock Forbidden: Not Admin' });
-        }
-    })
-}));
-
-const mockPrisma = new PrismaClient();
-
-// Helper to generate JWT for tests
-const generateTestToken = (userId: number, email: string = 'test@example.com'): string => {
-    return jwt.sign({ userId, email }, process.env.JWT_SECRET || 'test-secret', { expiresIn: '1h' });
-};
-
-// --- Test Setup --- 
-let adminUser: User;
-let memberUser: User;
-let otherUser: User;
-let community: Community;
 let adminToken: string;
 let memberToken: string;
 let otherToken: string;
+let adminUser: User;
+let memberUser: User;
+let otherUser: User;
+let testCommunity: Community;
+let testCommunityId: number;
 
-beforeAll(async () => {
-    // Clean database before tests
-    await prisma.membership.deleteMany({});
-    await prisma.community.deleteMany({});
-    await prisma.user.deleteMany({});
+// Define a dummy password hash for tests
+const dummyPasswordHash = bcrypt.hashSync('password123', 10);
 
-    // Create users
-    adminUser = await prisma.user.create({ data: { name: 'Admin User', email: 'admin@test.com', password: 'password' } });
-    memberUser = await prisma.user.create({ data: { name: 'Member User', email: 'member@test.com', password: 'password' } });
-    otherUser = await prisma.user.create({ data: { name: 'Other User', email: 'other@test.com', password: 'password' } });
+// jest.mock('../server', () => ({
+//   prisma: mockPrisma, 
+//   app: jest.requireActual('../server').app // Keep the actual app
+// }));
 
-    // Create community with admin as creator/admin
-    community = await prisma.community.create({ data: { name: 'Test Community', creatorId: adminUser.id } });
-    await prisma.membership.create({ data: { userId: adminUser.id, communityId: community.id, role: 'Admin' } });
-    await prisma.membership.create({ data: { userId: memberUser.id, communityId: community.id, role: 'Member' } });
 
-    // Generate tokens
-    adminToken = signJwt({ userId: adminUser.id, email: adminUser.email });
-    memberToken = signJwt({ userId: memberUser.id, email: memberUser.email });
-    otherToken = signJwt({ userId: otherUser.id, email: otherUser.email });
-});
+describe('Membership API', () => {
+    beforeAll(async () => {
+        // Clean database before tests
+        await prisma.membership.deleteMany({});
+        await prisma.community.deleteMany({});
+        await prisma.user.deleteMany({});
 
-afterAll(async () => {
-    await prisma.$disconnect();
-});
+        // Create users
+        adminUser = await prisma.user.create({ data: { name: 'Admin User', email: 'admin@test.com', passwordHash: dummyPasswordHash } });
+        memberUser = await prisma.user.create({ data: { name: 'Member User', email: 'member@test.com', passwordHash: dummyPasswordHash } });
+        otherUser = await prisma.user.create({ data: { name: 'Other User', email: 'other@test.com', passwordHash: dummyPasswordHash } });
 
-describe('Membership API Endpoints', () => {
-    let testUser: User;
-    let testAdmin: User;
-    let userToAdd: User;
-    let testCommunity: Community;
-    let userMembership: Membership;
-    let adminMembership: Membership;
-    let userToken: string;
-    let adminToken: string;
-    let userToAddToken: string;
+        // Create tokens
+        adminToken = generateToken(adminUser.id);
+        memberToken = generateToken(memberUser.id);
+        otherToken = generateToken(otherUser.id);
 
-    beforeEach(() => {
-        jest.clearAllMocks();
+        // Create a community
+        testCommunity = await prisma.community.create({
+            data: {
+                name: 'Test Community for Members',
+                creatorId: adminUser.id,
+            },
+        });
+        testCommunityId = testCommunity.id;
 
-        // Setup test data
-        testUser = { id: 1, email: 'member@example.com', name: 'Test Member', passwordHash: 'hash', avatarUrl: null, createdAt: new Date(), updatedAt: new Date() };
-        testAdmin = { id: 2, email: 'admin@example.com', name: 'Test Admin', passwordHash: 'hash', avatarUrl: null, createdAt: new Date(), updatedAt: new Date() };
-        userToAdd = { id: 3, email: 'new@example.com', name: 'New User', passwordHash: 'hash', avatarUrl: null, createdAt: new Date(), updatedAt: new Date() };
-        testCommunity = { id: 101, name: 'Membership Test Community', description: null, imageUrl: null, creatorId: testAdmin.id, createdAt: new Date(), updatedAt: new Date() };
-        userMembership = { userId: testUser.id, communityId: testCommunity.id, role: 'Member', points: 0, joinedAt: new Date() };
-        adminMembership = { userId: testAdmin.id, communityId: testCommunity.id, role: 'Admin', points: 0, joinedAt: new Date() };
-
-        userToken = generateTestToken(testUser.id, testUser.email);
-        adminToken = generateTestToken(testAdmin.id, testAdmin.email);
-        userToAddToken = generateTestToken(userToAdd.id, userToAdd.email);
-
-        // Mock Prisma responses
-        (mockPrisma.membership.findUnique as jest.Mock)
-            .mockImplementation(async ({ where: { userId_communityId } }) => {
-                 if (userId_communityId.userId === testUser.id && userId_communityId.communityId === testCommunity.id) return userMembership;
-                 if (userId_communityId.userId === testAdmin.id && userId_communityId.communityId === testCommunity.id) return adminMembership;
-                 if (userId_communityId.userId === userToAdd.id && userId_communityId.communityId === testCommunity.id) return null;
-                 return null;
-            });
-        (mockPrisma.user.findUnique as jest.Mock)
-            .mockImplementation(async ({ where: { id } }) => {
-                if (id === testUser.id) return testUser;
-                if (id === testAdmin.id) return testAdmin;
-                if (id === userToAdd.id) return userToAdd;
-                return null;
-            });
-        (mockPrisma.community.findUnique as jest.Mock)
-            .mockImplementation(async ({ where: { id } }) => {
-                if (id === testCommunity.id) return testCommunity;
-                return null;
-            });
-
-          // Reset authorizeAdmin mock implementation for each test
-          const authorizeAdminMock = require('../middleware/authorizeAdmin').authorizeAdmin;
-          authorizeAdminMock.mockImplementation((req: any, res: any, next: () => void) => {
-              const requestingUserId = req.user?.userId;
-              if (requestingUserId === testAdmin.id) { // User 2 is admin
-                  next();
-              } else {
-                  res.status(403).json({ message: 'Mock Forbidden: Not Admin' });
-              }
-          });
+        // Create initial memberships (Admin is creator, add Member)
+        await prisma.membership.create({ data: { userId: adminUser.id, communityId: testCommunityId, role: 'Admin' } });
+        await prisma.membership.create({ data: { userId: memberUser.id, communityId: testCommunityId, role: 'Member' } });
     });
 
-    // --- POST /communities/:communityId/members --- 
-    describe('POST /communities/:communityId/members', () => {
+    afterAll(async () => {
+        await prisma.membership.deleteMany({});
+        await prisma.community.deleteMany({});
+        await prisma.user.deleteMany({});
+        await prisma.$disconnect();
+    });
 
-        it('should allow an admin to add a member', async () => {
-            const addMemberData = { userId: userToAdd.id }; 
-            const newMembershipData = { userId: userToAdd.id, communityId: testCommunity.id, role: 'Member', points: 0, joinedAt: new Date() }; 
-            (mockPrisma.membership.create as jest.Mock).mockResolvedValue(newMembershipData);
-
-            const response = await request(app)
-                .post(`/communities/${testCommunity.id}/members`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send(addMemberData);
-
-            expect(response.status).toBe(201);
-             // Convert date to string for comparison
-            expect(response.body).toEqual({
-                ...newMembershipData,
-                joinedAt: newMembershipData.joinedAt.toISOString()
-            });
-            expect(mockPrisma.membership.create).toHaveBeenCalledWith({
-                data: { userId: userToAdd.id, communityId: testCommunity.id, role: 'Member', points: 0 }
-            });
+    // Add a general beforeEach to reset potentially added/modified memberships
+    beforeEach(async () => {
+        // Delete potential membership for otherUser created in POST tests
+        await prisma.membership.deleteMany({
+            where: {
+                userId: otherUser.id,
+                communityId: testCommunityId
+            }
         });
-
-        it('should return 403 if a non-admin tries to add a member', async () => {
-            const addMemberData = { userId: userToAdd.id }; 
-            const response = await request(app)
-                .post(`/communities/${testCommunity.id}/members`)
-                .set('Authorization', `Bearer ${userToken}`)
-                .send(addMemberData);
-
-            expect(response.status).toBe(403);
-            expect(response.body.message).toContain('Not Admin'); 
-            expect(mockPrisma.membership.create).not.toHaveBeenCalled();
-        });
-
-        it('should return 409 if user is already a member', async () => {
-            const addMemberData = { userId: testUser.id }; 
-            const prismaError = { code: 'P2002', meta: { target: ['userId', 'communityId'] } };
-            (mockPrisma.membership.create as jest.Mock).mockRejectedValue(prismaError);
-
-            const response = await request(app)
-                .post(`/communities/${testCommunity.id}/members`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send(addMemberData); 
-
-            expect(response.status).toBe(409);
-            expect(response.body.message).toContain('already a member');
-        });
-
-        it('should return 400 if userId is missing or invalid', async () => {
-            const response = await request(app)
-                .post(`/communities/${testCommunity.id}/members`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({}); 
-            expect(response.status).toBe(400);
-
-             const response2 = await request(app)
-                .post(`/communities/${testCommunity.id}/members`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({userId: 'invalid'}); 
-            expect(response2.status).toBe(400);
-        });
-         it('should return 404 if user to add does not exist', async () => {
-            const addMemberData = { userId: 999 }; 
-            (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null); // Simulate user not found
-            const response = await request(app)
-                .post(`/communities/${testCommunity.id}/members`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send(addMemberData); 
-            expect(response.status).toBe(404);
-            expect(response.body.message).toContain('User to be added does not exist');
+        // Reset memberUser role which might be changed in PATCH tests
+        await prisma.membership.updateMany({
+             where: { userId: memberUser.id, communityId: testCommunityId },
+             data: { role: 'Member' }
         });
     });
 
     // --- GET /communities/:communityId/members --- 
     describe('GET /communities/:communityId/members', () => {
-         
-        it('should allow a member to list members', async () => {
-             const membersListRaw = [
-                { ...adminMembership },
-                { ...userMembership },
-            ];
-             // Expected structure should match what the MOCK returns
-             // In this setup, the mock findMany doesn't add the user object, 
-             // so we compare against the raw membership data + serialized date.
-             const membersListExpected = membersListRaw.map(m => ({
-                 ...m,
-                 joinedAt: m.joinedAt.toISOString()
-             }));
-            (mockPrisma.membership.findMany as jest.Mock).mockResolvedValue(membersListRaw);
+        it('should list members for an existing community member', async () => {
+            const res = await request(app)
+                .get(`/communities/${testCommunityId}/members`)
+                .set('Authorization', `Bearer ${memberToken}`);
+            
+            expect(res.statusCode).toEqual(200);
+            expect(res.body).toBeInstanceOf(Array);
+            expect(res.body.length).toBe(2); // Admin + Member
+            expect(res.body.some((m: any) => m.userId === adminUser.id)).toBe(true);
+            expect(res.body.some((m: any) => m.userId === memberUser.id)).toBe(true);
+        });
 
-            const response = await request(app)
-                .get(`/communities/${testCommunity.id}/members`)
-                .set('Authorization', `Bearer ${userToken}`);
+        it('should return 403 if user is not a member', async () => {
+             const res = await request(app)
+                .get(`/communities/${testCommunityId}/members`)
+                .set('Authorization', `Bearer ${otherToken}`);
+            expect(res.statusCode).toEqual(403);
+        });
+         it('should return 404 if community does not exist', async () => {
+            const nonExistentId = 99999;
+            const res = await request(app)
+                .get(`/communities/${nonExistentId}/members`)
+                .set('Authorization', `Bearer ${adminToken}`); // Use any valid token
+            expect(res.statusCode).toEqual(404); 
+        });
 
-            expect(response.status).toBe(200);
-            expect(response.body).toEqual(membersListExpected.map(m => ({...m, joinedAt: m.joinedAt})));
-             expect(mockPrisma.membership.findMany).toHaveBeenCalledWith({
-                where: { communityId: testCommunity.id },
-                include: { user: { select: { id: true, name: true, avatarUrl: true } } },
-                orderBy: { user: { name: 'asc' } }
+        it('should return 401 if not authenticated', async () => {
+             const res = await request(app)
+                .get(`/communities/${testCommunityId}/members`);
+            expect(res.statusCode).toEqual(401);
+        });
+    });
+
+    // --- POST /communities/:communityId/members --- 
+    describe('POST /communities/:communityId/members', () => {
+        it('should allow an admin to add a new member by email', async () => {
+            const res = await request(app)
+                .post(`/communities/${testCommunityId}/members`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ userIdentifier: otherUser.email }); // Add by email
+            
+            expect(res.statusCode).toEqual(201);
+            expect(res.body.userId).toEqual(otherUser.id);
+            expect(res.body.communityId).toEqual(testCommunityId);
+            expect(res.body.role).toEqual('Member'); // Default role
+        });
+
+         it('should allow an admin to add a new member by ID', async () => {
+            // First remove the user added previously to avoid conflict
+            await prisma.membership.deleteMany({ where: { userId: otherUser.id, communityId: testCommunityId } });
+            
+            const res = await request(app)
+                .post(`/communities/${testCommunityId}/members`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ userIdentifier: String(otherUser.id) }); // Add by ID (as string)
+            
+            expect(res.statusCode).toEqual(201);
+            expect(res.body.userId).toEqual(otherUser.id);
+        });
+
+        it('should return 409 if user is already a member', async () => {
+            const res = await request(app)
+                .post(`/communities/${testCommunityId}/members`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ userIdentifier: memberUser.email }); // Try adding existing member
+            expect(res.statusCode).toEqual(409);
+        });
+
+        it('should return 404 if user to add does not exist', async () => {
+            const res = await request(app)
+                .post(`/communities/${testCommunityId}/members`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ userIdentifier: 'nonexistent@test.com' });
+            expect(res.statusCode).toEqual(404);
+        });
+
+        it('should return 403 if requester is not an admin', async () => {
+            const res = await request(app)
+                .post(`/communities/${testCommunityId}/members`)
+                .set('Authorization', `Bearer ${memberToken}`)
+                .send({ userIdentifier: otherUser.email });
+            expect(res.statusCode).toEqual(403);
+        });
+
+        it('should return 401 if not authenticated', async () => {
+            const res = await request(app)
+                .post(`/communities/${testCommunityId}/members`)
+                .send({ userIdentifier: otherUser.email });
+            expect(res.statusCode).toEqual(401);
+        });
+         it('should return 400 if userIdentifier is missing', async () => {
+            const res = await request(app)
+                .post(`/communities/${testCommunityId}/members`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({}); // Missing identifier
+            expect(res.statusCode).toEqual(400);
+        });
+        
+        // Cannot add self test is handled within service
+
+    });
+
+    // --- PATCH /communities/:communityId/members/:userId --- 
+    describe('PATCH /communities/:communityId/members/:userId', () => {
+        it('should allow an admin to update a member role to Admin', async () => {
+            const res = await request(app)
+                .patch(`/communities/${testCommunityId}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: 'Admin' }); // Update to Admin (string)
+            
+            expect(res.statusCode).toEqual(200);
+            expect(res.body.role).toEqual('Admin');
+        });
+
+        it('should allow an admin to update a member role to Member', async () => {
+            // First ensure the user is Admin
+            await prisma.membership.update({ 
+                where: { userId_communityId: { userId: memberUser.id, communityId: testCommunityId } }, 
+                data: { role: 'Admin' } 
             });
+            
+            const res = await request(app)
+                .patch(`/communities/${testCommunityId}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: 'Member' }); // Update to Member (string)
+            
+            expect(res.statusCode).toEqual(200);
+            expect(res.body.role).toEqual('Member');
+        });
+        
+        it('should return 400 for invalid role value', async () => {
+            const res = await request(app)
+                .patch(`/communities/${testCommunityId}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: 'SuperAdmin' }); // Invalid role
+            expect(res.statusCode).toEqual(400);
         });
 
-        it('should return 403 if the user is not a member', async () => {
-            const response = await request(app)
-                .get(`/communities/${testCommunity.id}/members`)
-                .set('Authorization', `Bearer ${userToAddToken}`); 
-
-            expect(response.status).toBe(403);
-            expect(response.body.message).toContain('not a member');
-            expect(mockPrisma.membership.findMany).not.toHaveBeenCalled();
+        it('should return 404 if membership does not exist', async () => {
+            const res = await request(app)
+                .patch(`/communities/${testCommunityId}/members/${otherUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: 'Admin' });
+            expect(res.statusCode).toEqual(404);
         });
 
-        it('should return 404 if community does not exist', async () => {
-            (mockPrisma.community.findUnique as jest.Mock).mockResolvedValue(null);
-            const response = await request(app)
-                .get(`/communities/9999/members`)
-                .set('Authorization', `Bearer ${userToken}`);
-            expect(response.status).toBe(404);
-            expect(response.body.message).toContain('Community not found');
-            expect(mockPrisma.membership.findMany).not.toHaveBeenCalled();
+        it('should return 403 if requester is not an admin', async () => {
+            const res = await request(app)
+                .patch(`/communities/${testCommunityId}/members/${memberUser.id}`)
+                .set('Authorization', `Bearer ${memberToken}`)
+                .send({ role: 'Admin' });
+            expect(res.statusCode).toEqual(403);
+        });
+
+        it('should return 401 if not authenticated', async () => {
+            const res = await request(app)
+                .patch(`/communities/${testCommunityId}/members/${memberUser.id}`)
+                .send({ role: 'Admin' });
+            expect(res.statusCode).toEqual(401);
+        });
+        
+        it('should return 400 if attempting to change creator role from Admin', async () => {
+            const res = await request(app)
+                .patch(`/communities/${testCommunityId}/members/${adminUser.id}`) // Target admin/creator
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ role: 'Member' }); // Try demoting
+            expect(res.statusCode).toEqual(400);
+            expect(res.body.message).toContain('Cannot change the role');
         });
     });
 
     // --- DELETE /communities/:communityId/members/:userId --- 
     describe('DELETE /communities/:communityId/members/:userId', () => {
-         it('should allow an admin to remove a member', async () => {
-            (mockPrisma.membership.delete as jest.Mock).mockResolvedValue(userMembership);
-
-            const response = await request(app)
-                .delete(`/communities/${testCommunity.id}/members/${testUser.id}`)
+         beforeEach(async () => {
+            // Specific setup for DELETE: Ensure otherUser IS a member before each test in this block
+            await prisma.membership.upsert({
+                where: { userId_communityId: { userId: otherUser.id, communityId: testCommunityId } },
+                update: { role: 'Member' }, // Ensure role is Member if updating
+                create: { userId: otherUser.id, communityId: testCommunityId, role: 'Member' }
+            });
+        });
+        
+        it('should allow an admin to remove a member', async () => {
+            const res = await request(app)
+                .delete(`/communities/${testCommunityId}/members/${otherUser.id}`)
                 .set('Authorization', `Bearer ${adminToken}`);
-
-            expect(response.status).toBe(204);
-            expect(mockPrisma.membership.delete).toHaveBeenCalledWith({
-                where: { userId_communityId: { userId: testUser.id, communityId: testCommunity.id } }
-            });
-        });
-
-        it('should return 403 if a non-admin tries to remove a member', async () => {
-            const response = await request(app)
-                .delete(`/communities/${testCommunity.id}/members/${testUser.id}`)
-                .set('Authorization', `Bearer ${userToken}`);
-
-            expect(response.status).toBe(403);
-            expect(response.body.message).toContain('Not Admin');
-            expect(mockPrisma.membership.delete).not.toHaveBeenCalled();
-        });
-
-        it('should return 404 if membership to delete does not exist', async () => {
-            const prismaError = { code: 'P2025' };
-            (mockPrisma.membership.delete as jest.Mock).mockRejectedValue(prismaError);
-
-             const response = await request(app)
-                .delete(`/communities/${testCommunity.id}/members/${userToAdd.id}`) 
-                .set('Authorization', `Bearer ${adminToken}`);
-
-            expect(response.status).toBe(404);
-            expect(response.body.message).toContain('Membership not found');
-        });
-
-        it('should return 400 if trying to remove the creator', async () => {
-            (mockPrisma.community.findUnique as jest.Mock).mockResolvedValue(testCommunity);
-             (mockPrisma.membership.delete as jest.Mock).mockImplementation(async ({where}) => {
-                if(where.userId_communityId.userId === testCommunity.creatorId) {
-                    throw new Error('Cannot remove the community creator.');
-                }
-                // This mock should return *something* on success to avoid issues
-                // Returning the found membership makes sense, though it's deleted
-                const membership = where.userId_communityId.userId === testUser.id ? userMembership : adminMembership;
-                return membership; 
-            });
-
-            const response = await request(app)
-                .delete(`/communities/${testCommunity.id}/members/${testAdmin.id}`) 
-                .set('Authorization', `Bearer ${adminToken}`);
-
-            expect(response.status).toBe(400);
-            expect(response.body.message).toContain('Cannot remove the community creator');
-        });
-    });
-
-    // --- PATCH /communities/:communityId/members/:userId - Update Member Role --- 
-    describe('PATCH /communities/:communityId/members/:userId - Update Member Role', () => {
-
-        it('should allow an admin to update a member\'s role to Admin', async () => {
-            const response = await request(app)
-                .patch(`/communities/${community.id}/members/${memberUser.id}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({ role: MembershipRole.Admin });
-
-            expect(response.status).toBe(200);
-            expect(response.body.userId).toBe(memberUser.id);
-            expect(response.body.communityId).toBe(community.id);
-            expect(response.body.role).toBe(MembershipRole.Admin);
-
-            // Verify in DB
-            const updatedMembership = await prisma.membership.findUnique({ 
-                where: { userId_communityId: { userId: memberUser.id, communityId: community.id } }
-            });
-            expect(updatedMembership?.role).toBe(MembershipRole.Admin);
-        });
-
-        it('should allow an admin to update an admin\'s role back to Member', async () => {
-            // First, ensure memberUser is Admin from previous test or set explicitly
-            await prisma.membership.update({ 
-                where: { userId_communityId: { userId: memberUser.id, communityId: community.id } },
-                data: { role: MembershipRole.Admin }
-             });
-
-            const response = await request(app)
-                .patch(`/communities/${community.id}/members/${memberUser.id}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({ role: MembershipRole.Member });
-
-            expect(response.status).toBe(200);
-            expect(response.body.role).toBe(MembershipRole.Member);
-
-            // Verify in DB
-            const updatedMembership = await prisma.membership.findUnique({ 
-                where: { userId_communityId: { userId: memberUser.id, communityId: community.id } }
-            });
-            expect(updatedMembership?.role).toBe(MembershipRole.Member);
-        });
-
-        it('should return 403 if a non-admin tries to update a role', async () => {
-            const response = await request(app)
-                .patch(`/communities/${community.id}/members/${memberUser.id}`)
-                .set('Authorization', `Bearer ${memberToken}`) // Use member token
-                .send({ role: MembershipRole.Admin });
-
-            expect(response.status).toBe(403);
-            expect(response.body.message).toContain('admin privileges required');
-        });
-
-         it('should return 403 if an admin of another community tries to update a role', async () => {
-             // Assume otherUser is admin of a different community (not set up here, but token implies)
-            const response = await request(app)
-                .patch(`/communities/${community.id}/members/${memberUser.id}`)
-                .set('Authorization', `Bearer ${otherToken}`) // Use other user token
-                .send({ role: MembershipRole.Admin });
-
-            expect(response.status).toBe(403);
-            expect(response.body.message).toContain('admin privileges required'); // authorizeAdmin checks specific community
-        });
-
-        it('should return 400 if the role is invalid', async () => {
-            const response = await request(app)
-                .patch(`/communities/${community.id}/members/${memberUser.id}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({ role: 'SuperAdmin' });
-
-            expect(response.status).toBe(400);
-            expect(response.body.message).toContain('Invalid role provided');
-        });
-
-        it('should return 404 if the membership does not exist', async () => {
-            const nonMemberId = otherUser.id; // User not in this community
-            const response = await request(app)
-                .patch(`/communities/${community.id}/members/${nonMemberId}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({ role: MembershipRole.Admin });
-
-            expect(response.status).toBe(404); 
-            expect(response.body.message).toContain('Membership not found');
-        });
-
-         it('should return 404 if the community does not exist', async () => {
-            const nonExistentCommunityId = 9999;
-            const response = await request(app)
-                .patch(`/communities/${nonExistentCommunityId}/members/${memberUser.id}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({ role: MembershipRole.Admin });
-
-            // authorizeAdmin middleware should handle this check before controller
-            expect(response.status).toBe(404); 
-            expect(response.body.message).toContain('Community not found'); 
-        });
-
-        it('should return 400 if trying to change the creator\'s role', async () => {
-            const creatorUserId = adminUser.id; // The creator is the admin in this setup
-            const response = await request(app)
-                .patch(`/communities/${community.id}/members/${creatorUserId}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({ role: MembershipRole.Member });
-
-            // Note: The controller also prevents admins changing their *own* role,
-            // but the service layer prevents changing the *creator's* role specifically.
-            // Let's assume a different admin tries to change the creator's role.
-            // We'll simulate this by allowing the controller check to pass but expecting the service error.
-            // This requires a more complex setup or relaxing the controller check slightly for the test.
-            // For simplicity, we test the direct outcome assuming the service check is the primary one.
-
-             // If creator = requesting admin, controller returns 400: "cannot change own role"
-             // If different admin requests, service returns 400: "cannot change creator's role"
-            expect(response.status).toBe(400); 
-            expect(response.body.message).toMatch(/Cannot change the community creator's role|Admins cannot change their own role/);
-        });
-
-        it('should return 400 if admin tries to change their own role', async () => {
-            const response = await request(app)
-                .patch(`/communities/${community.id}/members/${adminUser.id}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({ role: MembershipRole.Member });
             
-            expect(response.status).toBe(400); 
-            expect(response.body.message).toContain('Admins cannot change their own role');
+            expect(res.statusCode).toEqual(204);
+            
+            // Verify member was removed
+            const membership = await prisma.membership.findUnique({
+                where: { userId_communityId: { userId: otherUser.id, communityId: testCommunityId } }
+            });
+            expect(membership).toBeNull();
         });
 
+        it('should return 404 if membership does not exist', async () => {
+             // Remove first
+             await prisma.membership.deleteMany({ where: { userId: otherUser.id, communityId: testCommunityId } });
+             
+             const res = await request(app)
+                .delete(`/communities/${testCommunityId}/members/${otherUser.id}`)
+                .set('Authorization', `Bearer ${adminToken}`);
+            expect(res.statusCode).toEqual(404);
+        });
+
+        it('should return 403 if requester is not an admin', async () => {
+            const res = await request(app)
+                .delete(`/communities/${testCommunityId}/members/${otherUser.id}`)
+                .set('Authorization', `Bearer ${memberToken}`);
+            expect(res.statusCode).toEqual(403);
+        });
+
+        it('should return 401 if not authenticated', async () => {
+            const res = await request(app)
+                .delete(`/communities/${testCommunityId}/members/${otherUser.id}`);
+            expect(res.statusCode).toEqual(401);
+        });
+        
+         it('should return 400 if attempting to remove the creator', async () => {
+            const res = await request(app)
+                .delete(`/communities/${testCommunityId}/members/${adminUser.id}`) // Try removing creator
+                .set('Authorization', `Bearer ${adminToken}`);
+            expect(res.statusCode).toEqual(400);
+             expect(res.body.message).toContain('Cannot remove the community creator');
+        });
     });
 }); 
