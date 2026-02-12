@@ -1,4 +1,4 @@
-## Votons Fun! (democracy-is-fun)
+## Democracy Is Fun)
 
 A web platform that helps communities make collective decisions in a fun, fair, and interactive way. Users can join multiple communities to propose, discuss, vote, and coordinate activities, with a clean Apple-inspired UI and a Node/Prisma backend.
 
